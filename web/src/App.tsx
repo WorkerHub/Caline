@@ -1,5 +1,6 @@
 import {
   createBrowserRouter,
+  Navigate,
   type RouteObject,
   RouterProvider
 } from "react-router"
@@ -19,12 +20,14 @@ import { ForgotPasswordPage } from "@/pages/auth/forgot-password"
 import { LoginPage } from "@/pages/auth/login"
 import { RegisterPage } from "@/pages/auth/register"
 import { ChangePasswordPage } from "@/pages/change-password"
+import { CommentsPage } from "@/pages/comments/comments-page"
+import { DataPage } from "@/pages/data/data-page"
 import { HomePage } from "@/pages/home"
 import { NotFoundPage } from "@/pages/not-found"
 import { ProfilePage } from "@/pages/profile"
 import { SettingsPage } from "@/pages/settings"
 import { SetupPage } from "@/pages/setup"
-import { WorkbenchPage } from "@/pages/workbench"
+import { SiteSettingsPage } from "@/pages/site-settings/site-settings-page"
 
 /**
  * 路由表单独导出：测试用 createMemoryRouter(routes) 拿到同一份定义。
@@ -40,6 +43,8 @@ export const routes: RouteObject[] = [
   {
     element: <RootGate />,
     children: [
+      { path: "/ui", element: <Navigate to="/" replace /> },
+      { path: "/ui/*", element: <Navigate to="/" replace /> },
       {
         element: <GuestOnly />,
         children: [
@@ -60,7 +65,14 @@ export const routes: RouteObject[] = [
               {
                 element: <AppShell />,
                 children: [
-                  { path: "/workbench", element: <WorkbenchPage /> },
+                  { path: "/", element: <Navigate to="/comments" replace /> },
+                  { path: "/comments", element: <CommentsPage /> },
+                  { path: "/site-settings", element: <SiteSettingsPage /> },
+                  { path: "/data", element: <DataPage /> },
+                  {
+                    path: "/workbench",
+                    element: <Navigate to="/comments" replace />
+                  },
                   { path: "/profile", element: <ProfilePage /> },
                   { path: "/settings", element: <SettingsPage /> },
                   { path: "/about", element: <AboutPage /> },

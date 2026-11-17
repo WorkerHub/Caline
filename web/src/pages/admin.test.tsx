@@ -31,6 +31,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       enableUser: vi.fn(),
       changeUserRole: vi.fn(),
       deleteUser: vi.fn(),
+      updateUser: vi.fn(),
       runSetup: vi.fn()
     },
     meApi: { ...actual.meApi, get: vi.fn(), update: vi.fn() }
@@ -56,6 +57,7 @@ beforeEach(() => {
   vi.mocked(adminApi.enableUser).mockReset()
   vi.mocked(adminApi.changeUserRole).mockReset()
   vi.mocked(adminApi.deleteUser).mockReset()
+  vi.mocked(adminApi.updateUser).mockReset()
 })
 
 describe("系统管理", () => {
@@ -597,5 +599,31 @@ describe("用户管理操作列", () => {
     )
     expect(screen.getByRole("dialog")).toBeInTheDocument()
     expect(adminApi.deleteUser).toHaveBeenCalledWith(2)
+  })
+
+  it("编辑标签：在菜单中点击编辑标签，输入新标签保存后调用 updateUser 契约", async () => {
+    const user = menuUser()
+    vi.mocked(adminApi.updateUser).mockResolvedValue({ success: true })
+    await openUsers([adminUser({ label: "旧标签" })], user)
+
+    expect(screen.getByText("旧标签")).toBeInTheDocument()
+
+    const menu = await openMenu(user, "user@example.com")
+    await user.click(within(menu).getByRole("menuitem", { name: "编辑标签" }))
+
+    const dialog = await screen.findByRole("dialog")
+    const input = within(dialog).getByRole("textbox")
+    expect(input).toHaveValue("旧标签")
+
+    await user.clear(input)
+    await user.type(input, "特邀作者")
+    await user.click(within(dialog).getByRole("button", { name: "保存" }))
+
+    await waitFor(() =>
+      expect(adminApi.updateUser).toHaveBeenCalledWith(2, {
+        label: "特邀作者"
+      })
+    )
+    await waitFor(() => expect(adminApi.users).toHaveBeenCalledTimes(2))
   })
 })

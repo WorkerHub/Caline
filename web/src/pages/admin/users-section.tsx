@@ -5,6 +5,7 @@ import {
   EllipsisIcon,
   KeyRoundIcon,
   ShieldCheckIcon,
+  TagIcon,
   Trash2Icon,
   UserIcon
 } from "lucide-react"
@@ -13,6 +14,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogClose,
@@ -73,6 +75,9 @@ export function UsersSection() {
     useState<AdminResetPasswordResult | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
   const [deleteError, setDeleteError] = useState("")
+  const [labelTarget, setLabelTarget] = useState<AdminUser | null>(null)
+  const [labelValue, setLabelValue] = useState("")
+  const [labelError, setLabelError] = useState("")
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -178,6 +183,22 @@ export function UsersSection() {
     }
   }
 
+  const saveLabel = async () => {
+    if (!labelTarget) return
+    setBusyId(labelTarget.id)
+    setLabelError("")
+    try {
+      await adminApi.updateUser(labelTarget.id, { label: labelValue.trim() })
+      toast.success(t("admin.users.labelUpdated"))
+      setLabelTarget(null)
+      await load()
+    } catch (err) {
+      setLabelError(describeApiError(t, err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
     <section className="space-y-3 rounded-xl border bg-card p-4">
       <h3 className="font-heading text-sm font-semibold">
@@ -239,7 +260,17 @@ export function UsersSection() {
                   </div>
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">
-                  <span>{user.displayName || "—"}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span>{user.displayName || "—"}</span>
+                    {user.label ? (
+                      <Badge
+                        variant="outline"
+                        className="text-[11px] px-1 py-0"
+                      >
+                        {user.label}
+                      </Badge>
+                    ) : null}
+                  </div>
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   <Badge variant={ROLE_VARIANT[user.role]}>
@@ -295,6 +326,17 @@ export function UsersSection() {
                         >
                           <KeyRoundIcon aria-hidden="true" />
                           {t("admin.users.reset.title")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={busyId === user.id}
+                          onSelect={() => {
+                            setLabelTarget(user)
+                            setLabelValue(user.label ?? "")
+                            setLabelError("")
+                          }}
+                        >
+                          <TagIcon aria-hidden="true" />
+                          {t("admin.users.editLabel")}
                         </DropdownMenuItem>
                         {user.status === "disabled" ? (
                           <DropdownMenuItem
@@ -443,6 +485,51 @@ export function UsersSection() {
               onClick={() => void confirmDelete()}
             >
               {t("admin.users.delete.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={labelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLabelTarget(null)
+            setLabelError("")
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("admin.users.labelDialogTitle")}</DialogTitle>
+            <DialogDescription>{labelTarget?.email}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Input
+              value={labelValue}
+              onChange={(e) => setLabelValue(e.target.value)}
+              placeholder={t("admin.users.labelDialogPlaceholder")}
+              maxLength={30}
+            />
+            {labelError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {labelError}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" size="sm" variant="outline">
+                {t("common.actions.cancel")}
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              size="sm"
+              disabled={busyId === labelTarget?.id}
+              onClick={() => void saveLabel()}
+            >
+              {t("common.actions.save")}
             </Button>
           </DialogFooter>
         </DialogContent>

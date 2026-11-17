@@ -1,12 +1,14 @@
 import {
+  DatabaseIcon,
   InfoIcon,
-  LayoutDashboardIcon,
   LogOutIcon,
   MenuIcon,
+  MessageSquareIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   SettingsIcon,
   ShieldCheckIcon,
+  SlidersHorizontalIcon,
   UserIcon
 } from "lucide-react"
 import {
@@ -69,9 +71,19 @@ import { useSiteStore } from "@/stores/site"
 
 const SIDEBAR_ITEMS = [
   {
-    to: "/workbench",
-    labelKey: "workbench.nav.workbench",
-    icon: LayoutDashboardIcon
+    to: "/comments",
+    labelKey: "workbench.nav.comments",
+    icon: MessageSquareIcon
+  },
+  {
+    to: "/site-settings",
+    labelKey: "workbench.nav.siteSettings",
+    icon: SlidersHorizontalIcon
+  },
+  {
+    to: "/data",
+    labelKey: "workbench.nav.data",
+    icon: DatabaseIcon
   }
 ] as const
 
@@ -232,7 +244,7 @@ export function AppShell() {
       <Sidebar collapsible="icon">
         <SidebarHeader className="p-0">
           <NavLink
-            to="/workbench"
+            to="/comments"
             className="flex h-14 items-center gap-2 px-4 font-heading text-sm font-semibold tracking-tight transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
           >
             <SiteLogo />
@@ -319,7 +331,7 @@ export function AppShell() {
               <SheetHeader className="border-b px-4 py-3">
                 <SheetTitle className="text-sm font-semibold">
                   <NavLink
-                    to="/workbench"
+                    to="/comments"
                     onClick={() => setMobileOpen(false)}
                     className="inline-flex items-center gap-2"
                   >

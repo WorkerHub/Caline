@@ -80,6 +80,17 @@ describe("路由与根门", () => {
     ).toBeInTheDocument()
   })
 
+  it("旧 Waline 书签路径 /ui 重定向到 /", async () => {
+    vi.mocked(setupApi.state).mockResolvedValue(
+      setupState({ ownerExists: true, enabled: false })
+    )
+    renderAt(routes, "/ui")
+
+    expect(
+      await screen.findByRole("link", { name: "登录" })
+    ).toBeInTheDocument()
+  })
+
   it("迁移完成但尚无所有者时不再弹回 setup，注册页可达", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(
       setupState({ ownerExists: false, enabled: false })
@@ -140,20 +151,20 @@ describe("路由与根门", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("侧栏只剩工作台一个入口", async () => {
+  it("侧栏包含评论、系统设置、数据入口", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(
       setupState({ ownerExists: true, enabled: false })
     )
     vi.mocked(meApi.get).mockResolvedValue(me())
 
-    renderAt(routes, "/workbench")
+    renderAt(routes, "/comments")
     const nav = await screen.findByRole("navigation")
     expect(
       within(nav)
         .getAllByRole("link")
         .map((link) => link.textContent)
-    ).toEqual(["工作台"])
-    expect(within(nav).getByRole("link", { name: "工作台" })).toHaveAttribute(
+    ).toEqual(["评论", "系统设置", "数据"])
+    expect(within(nav).getByRole("link", { name: "评论" })).toHaveAttribute(
       "data-active",
       "true"
     )
@@ -193,28 +204,28 @@ describe("路由与根门", () => {
     expect(document.title).toBe(`登录 · ${PROJECT_NAME}`)
   })
 
-  it("登录态工作台标签页 title 为「工作台 · 站名」", async () => {
+  it("登录态默认页标签页 title 为「评论 · 站名」", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(
       setupState({ ownerExists: true, enabled: false })
     )
     vi.mocked(meApi.get).mockResolvedValue(me())
 
-    renderAt(routes, "/workbench")
-    await screen.findByRole("heading", { name: "工作台" })
-    expect(document.title).toBe(`工作台 · ${PROJECT_NAME}`)
+    renderAt(routes, "/comments")
+    await screen.findByRole("heading", { name: "评论" })
+    expect(document.title).toBe(`评论 · ${PROJECT_NAME}`)
   })
 
-  it("侧栏站名是回工作台的链接，底部显示三段式版本号", async () => {
+  it("侧栏站名是回评论默认页的链接，底部显示三段式版本号", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(
       setupState({ ownerExists: true, enabled: false })
     )
     vi.mocked(meApi.get).mockResolvedValue(me())
 
-    renderAt(routes, "/workbench")
-    await screen.findByRole("heading", { name: "工作台" })
+    renderAt(routes, "/comments")
+    await screen.findByRole("heading", { name: "评论" })
 
     const brand = screen.getByRole("link", { name: PROJECT_NAME })
-    expect(brand.getAttribute("href")).toBe("/workbench")
+    expect(brand.getAttribute("href")).toBe("/comments")
     // 站点标是装饰性图形：带在链接里，但不进可访问名（名仍只是站名）。
     const mark = brand.querySelector("svg")
     expect(mark).not.toBeNull()
@@ -234,14 +245,14 @@ describe("路由与根门", () => {
     )
     vi.mocked(meApi.get).mockResolvedValue(me())
 
-    renderAt(routes, "/workbench")
-    await screen.findByRole("heading", { name: "工作台" })
+    renderAt(routes, "/comments")
+    await screen.findByRole("heading", { name: "评论" })
 
     await accountUser().click(screen.getByRole("button", { name: "菜单" }))
 
     const dialog = await screen.findByRole("dialog")
     const brand = within(dialog).getByRole("link", { name: PROJECT_NAME })
-    expect(brand.getAttribute("href")).toBe("/workbench")
+    expect(brand.getAttribute("href")).toBe("/comments")
     expect(brand.querySelector("svg")).toHaveAttribute("aria-hidden", "true")
   })
 
@@ -253,8 +264,8 @@ describe("路由与根门", () => {
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, "320")
     localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, "false")
 
-    const view = renderAt(routes, "/workbench")
-    await screen.findByRole("heading", { name: "工作台" })
+    const view = renderAt(routes, "/comments")
+    await screen.findByRole("heading", { name: "评论" })
 
     const sidebar = view.container.querySelector('[data-slot="sidebar"]')
     expect(sidebar).toHaveAttribute("data-state", "collapsed")
@@ -279,8 +290,8 @@ describe("路由与根门", () => {
     )
     vi.mocked(meApi.get).mockResolvedValue(me())
 
-    const view = renderAt(routes, "/workbench")
-    await screen.findByRole("heading", { name: "工作台" })
+    const view = renderAt(routes, "/comments")
+    await screen.findByRole("heading", { name: "评论" })
 
     const wrapper = view.container.querySelector(
       '[data-slot="sidebar-wrapper"]'
@@ -323,8 +334,8 @@ describe("路由与根门", () => {
     vi.mocked(meApi.get).mockResolvedValue(me())
     localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, "false")
 
-    const view = renderAt(routes, "/workbench")
-    await screen.findByRole("heading", { name: "工作台" })
+    const view = renderAt(routes, "/comments")
+    await screen.findByRole("heading", { name: "评论" })
 
     const sidebar = view.container.querySelector('[data-slot="sidebar"]')
     expect(sidebar).toHaveAttribute("data-state", "collapsed")
@@ -345,8 +356,8 @@ describe("路由与根门", () => {
     )
     vi.mocked(meApi.get).mockResolvedValue(me())
 
-    renderAt(routes, "/workbench")
-    await screen.findByRole("heading", { name: "工作台" })
+    renderAt(routes, "/comments")
+    await screen.findByRole("heading", { name: "评论" })
 
     const collapse = screen.getByRole("button", { name: "收起侧栏" })
     expect(collapse.textContent).toBe("")

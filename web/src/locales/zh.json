@@ -174,6 +174,9 @@
     "title": "工作台",
     "nav": {
       "workbench": "工作台",
+      "comments": "评论",
+      "siteSettings": "系统设置",
+      "data": "数据",
       "settings": "设置",
       "about": "关于",
       "admin": "系统管理"
@@ -316,6 +319,11 @@
       "self": "我",
       "actions": "操作",
       "actionsFor": "{{email}} 的操作",
+      "label": "标签",
+      "editLabel": "编辑标签",
+      "labelDialogTitle": "编辑用户标签",
+      "labelDialogPlaceholder": "例如：作者、特邀等",
+      "labelUpdated": "标签已更新",
       "reset": {
         "title": "重置密码",
         "password": "一次性密码"
@@ -360,6 +368,122 @@
       "migrations": "迁移记录",
       "applied": "已执行",
       "skipped": "已跳过"
+    }
+  },
+  "comments": {
+    "title": "评论",
+    "status": {
+      "all": "全部",
+      "waiting": "待审",
+      "spam": "垃圾",
+      "approved": "已通过"
+    },
+    "searchPlaceholder": "搜索评论、昵称、邮箱或网址…",
+    "empty": "暂无评论",
+    "actions": {
+      "approve": "通过",
+      "spam": "标为垃圾",
+      "sticky": "置顶",
+      "unsticky": "取消置顶",
+      "edit": "编辑",
+      "delete": "删除",
+      "waiting": "标为待审"
+    },
+    "batch": {
+      "selected": "已选择 {{count}} 项",
+      "clear": "取消选择",
+      "confirmDeleteTitle": "批量删除评论",
+      "confirmDeleteDescription": "确定删除选中的 {{count}} 条评论？此操作无法撤销。"
+    },
+    "edit": {
+      "title": "编辑评论",
+      "content": "评论内容"
+    },
+    "delete": {
+      "title": "删除评论",
+      "description": "确定删除该评论及其回复？此操作无法撤销。"
+    },
+    "toast": {
+      "approved": "已通过",
+      "spammed": "已标为垃圾",
+      "stickied": "已置顶",
+      "unstickied": "已取消置顶",
+      "updated": "已更新",
+      "deleted": "已删除",
+      "batchSuccess": "已批量处理 {{count}} 条评论"
+    },
+    "pagination": {
+      "page": "第 {{current}} / {{total}} 页",
+      "prev": "上一页",
+      "next": "下一页"
+    },
+    "meta": {
+      "page": "所属页面",
+      "ip": "IP",
+      "ua": "UA",
+      "date": "时间"
+    }
+  },
+  "siteSettings": {
+    "title": "系统设置",
+    "section": {
+      "auditAndGuest": "审核与访客",
+      "contentRules": "内容规则",
+      "levelsAndDomains": "分级与安全",
+      "captchaAndNotice": "验证与通知"
+    },
+    "auditSwitch": "全站评论审核",
+    "guestMode": "访客发表权限",
+    "guestModeOptions": {
+      "open": "开放访客发表",
+      "login_only": "仅限登录用户",
+      "closed": "全站关闭发表"
+    },
+    "reservedNicks": "保留昵称",
+    "reservedNicksPlaceholder": "每行一个保留昵称",
+    "disallowedWords": "违禁词",
+    "disallowedWordsPlaceholder": "每行一个违禁词",
+    "ipBlacklist": "IP 黑名单",
+    "ipBlacklistPlaceholder": "每行一个 IP 地址",
+    "maxContentLength": "评论最大字数",
+    "ipRateLimitSeconds": "IP 限频间隔（秒）",
+    "levelThresholds": "等级阈值",
+    "levelThresholdsPlaceholder": "以逗号分隔，如 0, 10, 50, 100",
+    "gravatarMirror": "Gravatar 镜像地址",
+    "safeDomains": "安全域名",
+    "safeDomainsPlaceholder": "每行一个安全域名，如 example.com",
+    "turnstileEnabled": "Turnstile 验证码",
+    "turnstileSiteKey": "Turnstile Site Key",
+    "turnstileSecretKey": "Turnstile Secret Key",
+    "enotifyEnabled": "eNotify 管理员通知",
+    "enotifyKey": "eNotify Key",
+    "secretSet": "已配置，留空保持不变",
+    "secretNotSet": "未配置",
+    "saved": "系统设置已保存"
+  },
+  "data": {
+    "title": "数据",
+    "export": {
+      "title": "导出数据",
+      "description": "导出包含评论、计数器和用户的完整 JSON 备份文件。",
+      "action": "导出备份",
+      "success": "导出成功"
+    },
+    "import": {
+      "title": "导入数据",
+      "description": "从先前导出的 JSON 文件恢复数据。",
+      "selectFile": "选择备份文件",
+      "noFile": "未选择文件",
+      "preview": "数据概览",
+      "stats": "含 {{comments}} 条评论、{{counters}} 个页面计数、{{users}} 个用户",
+      "version": "版本",
+      "exportedAt": "导出时间",
+      "action": "导入数据",
+      "confirmTitle": "确认覆盖导入",
+      "confirmDescription": "导入将覆盖数据库中的现有数据，此操作不可逆。是否继续？",
+      "confirmButton": "确认导入",
+      "invalidJson": "备份文件格式无效",
+      "success": "导入成功：已恢复 {{comments}} 条评论、{{counters}} 个计数器、{{users}} 个用户"
     }
   }
 }

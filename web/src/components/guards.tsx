@@ -94,10 +94,10 @@ export function RequirePasswordChanged() {
   return <Outlet />
 }
 
-/** 未登录页（登录/注册/找回密码/公开首页）：已登录就回工作台。 */
+/** 未登录页（登录/注册/找回密码/公开首页）：已登录就去默认页。 */
 export function GuestOnly() {
   const user = useAuthStore((state) => state.user)
-  if (user) return <Navigate to="/workbench" replace />
+  if (user) return <Navigate to="/comments" replace />
   return <Outlet />
 }
 
