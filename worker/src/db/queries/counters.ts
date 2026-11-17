@@ -131,3 +131,45 @@ export async function incrementPageview(
   if (!counter) throw new Error("counter missing after incrementPageview")
   return counter
 }
+
+export async function incrementReaction(
+  db: D1Database,
+  prefix: string,
+  url: string,
+  reactionIndex: number
+): Promise<CounterRow> {
+  const index = Math.floor(reactionIndex)
+  if (index < 0 || index > 8) {
+    throw new Error(`Invalid reaction index: ${reactionIndex}`)
+  }
+  const field = `reaction${index}`
+  const table = counterTable(prefix)
+  const now = new Date().toISOString()
+
+  await db
+    .prepare(
+      `INSERT INTO ${table}
+        (url, pageview, reaction0, reaction1, reaction2, reaction3,
+         reaction4, reaction5, reaction6, reaction7, reaction8, created_at, updated_at)
+       VALUES (?, 0,
+         ${index === 0 ? "1" : "0"},
+         ${index === 1 ? "1" : "0"},
+         ${index === 2 ? "1" : "0"},
+         ${index === 3 ? "1" : "0"},
+         ${index === 4 ? "1" : "0"},
+         ${index === 5 ? "1" : "0"},
+         ${index === 6 ? "1" : "0"},
+         ${index === 7 ? "1" : "0"},
+         ${index === 8 ? "1" : "0"},
+         ?, ?)
+       ON CONFLICT(url) DO UPDATE SET
+         ${field} = ${table}.${field} + 1,
+         updated_at = excluded.updated_at`
+    )
+    .bind(url, now, now)
+    .run()
+
+  const counter = await getCounterByUrl(db, prefix, url)
+  if (!counter) throw new Error("counter missing after incrementReaction")
+  return counter
+}

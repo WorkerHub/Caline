@@ -38,6 +38,11 @@ export interface RequestMeta {
 
 /** 从 Cookie 里读会话令牌；没有则 null。 */
 export function readSessionToken(c: Context<HonoEnv>): string | null {
+  const authHeader = c.req.header("authorization")
+  if (authHeader?.startsWith("Bearer ")) {
+    const bearer = authHeader.slice(7).trim()
+    if (bearer) return bearer
+  }
   return getCookie(c, SESSION_COOKIE) ?? null
 }
 

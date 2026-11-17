@@ -42,3 +42,33 @@ export function rateLimited(c: Context<HonoEnv>, retryAfter: number): Response {
 export async function readJsonBody<T>(c: Context<HonoEnv>): Promise<T | null> {
   return c.req.json<T>().catch(() => null)
 }
+
+/** 统一契约成功信封 `{ data: T }`（规格 §4） */
+export function calineSuccess<T>(
+  c: Context<HonoEnv>,
+  data: T,
+  status: 200 | 201 = 200
+): Response {
+  return c.json({ data }, status)
+}
+
+/** 统一契约错误信封 `{ error: { code, message, ... } }`（规格 §4） */
+export function calineError(
+  c: Context<HonoEnv>,
+  status: ApiErrorStatus,
+  code: string,
+  message: string,
+  extra?: Record<string, unknown>
+): Response {
+  c.header("Cache-Control", "no-store")
+  return c.json(
+    {
+      error: {
+        code,
+        message,
+        ...(extra ?? {})
+      }
+    },
+    status
+  )
+}

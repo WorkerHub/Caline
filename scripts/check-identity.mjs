@@ -21,6 +21,7 @@ const ALLOWED = new Set([
   // slug 恰好与默认前缀同串时，全仓扫描不误报。
   "worker/src/config/defaults.json",
   "package.json",
+  "client/package.json",
   "web/package.json",
   "shared/package.json",
   "pnpm-lock.yaml",
@@ -100,6 +101,11 @@ const projectSlug = readConfigString("PROJECT_SLUG")
 if (projectName && projectSlug) {
   // 各令牌位置必须真的改成当前身份，否则"改名只改一半"也能悄悄通过。
   expectMatch("package.json", /"name":\s*"([^"]+)"/, projectSlug)
+  expectMatch(
+    "client/package.json",
+    /"name":\s*"([^"]+)"/,
+    `@${projectSlug}/client`
+  )
   expectMatch("web/package.json", /"name":\s*"([^"]+)"/, `${projectSlug}-web`)
   expectMatch("worker/wrangler.toml", /^name\s*=\s*"([^"]+)"/m, projectSlug)
 
@@ -154,9 +160,11 @@ if (projectName && projectSlug) {
       new RegExp(`\\b${escapeRegExp(projectName)}[A-Za-z0-9_]+`, "g"),
       ""
     )
-    // 允许契约包本身以及前端契约对齐文件中的注释与测试说明
+    // 允许契约包本身以及前端契约对齐文件、client 客户端包源码与公开构建静态产物中的注释与标识符
     if (
       relative.startsWith("shared/") ||
+      relative.startsWith("client/") ||
+      relative.startsWith("web/public/client/") ||
       relative === "web/src/lib/api-types.ts"
     ) {
       cleaned = cleaned.replaceAll(projectName, "")

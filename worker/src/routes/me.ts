@@ -42,6 +42,8 @@ meRoutes.get("/", async (c) => {
 async function updateProfile(c: Ctx): Promise<Response> {
   const body = await readJsonBody<{
     displayName?: unknown
+    avatar?: unknown
+    url?: unknown
     language?: unknown
     timezone?: unknown
   }>(c)
@@ -61,6 +63,20 @@ async function updateProfile(c: Ctx): Promise<Response> {
       return apiError(c, 400, "INVALID_DISPLAY_NAME", "Invalid display name")
     }
     patch.display_name = body.displayName.trim().slice(0, 80)
+  }
+
+  if (body.avatar !== undefined) {
+    if (typeof body.avatar !== "string") {
+      return apiError(c, 400, "INVALID_AVATAR", "Invalid avatar url")
+    }
+    patch.avatar = body.avatar.trim()
+  }
+
+  if (body.url !== undefined) {
+    if (typeof body.url !== "string") {
+      return apiError(c, 400, "INVALID_URL", "Invalid website url")
+    }
+    patch.url = body.url.trim()
   }
 
   if (body.language !== undefined) {

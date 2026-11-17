@@ -60,11 +60,16 @@ import {
 } from "../db/queries/users"
 import {
   apiError,
+  calineError,
+  calineSuccess,
   clientIp,
   nowSeconds,
   rateLimited,
   readJsonBody
 } from "../lib/http"
+import { isValidTimezone } from "../lib/timezone"
+import type { UpdateAuthMeInput } from "@caline/shared"
+
 import {
   emailVerificationEnforced,
   readRegistrationSettings
@@ -964,4 +969,77 @@ authRoutes.post("/password/reset", async (c) => {
   })
   await revokeAllSessions(c.env.DB, prefix, user.id)
   return c.json({ success: true })
+})
+
+// ─── GET /api/auth/me & PATCH /api/auth/me（规格 §4 账号接口）──────────────────
+
+authRoutes.get("/me", async (c) => {
+  const userId = c.get("userId")
+  if (!userId) {
+    return calineError(c, 401, "UNAUTHORIZED", "Sign in required")
+  }
+  const prefix = getTablePrefix(c.env)
+  const user = await findUserById(c.env.DB, prefix, userId)
+  if (!user) {
+    return calineError(c, 404, "USER_NOT_FOUND", "User not found")
+  }
+  return calineSuccess(c, await buildUserView(c.env, user))
+})
+
+authRoutes.patch("/me", async (c) => {
+  const userId = c.get("userId")
+  if (!userId) {
+    return calineError(c, 401, "UNAUTHORIZED", "Sign in required")
+  }
+
+  const body = await readJsonBody<UpdateAuthMeInput>(c)
+  if (!body) {
+    return calineError(c, 400, "INVALID_REQUEST", "Invalid request body")
+  }
+
+  const prefix = getTablePrefix(c.env)
+  const patch: Parameters<typeof updateUserFields>[3] = {}
+
+  if (body.displayName !== undefined) {
+    if (typeof body.displayName !== "string") {
+      return calineError(c, 400, "INVALID_DISPLAY_NAME", "Invalid display name")
+    }
+    patch.display_name = body.displayName.trim().slice(0, 80)
+  }
+
+  if (body.avatar !== undefined) {
+    if (typeof body.avatar !== "string") {
+      return calineError(c, 400, "INVALID_AVATAR", "Invalid avatar url")
+    }
+    patch.avatar = body.avatar.trim()
+  }
+
+  if (body.url !== undefined) {
+    if (typeof body.url !== "string") {
+      return calineError(c, 400, "INVALID_URL", "Invalid website url")
+    }
+    patch.url = body.url.trim()
+  }
+
+  if (body.language !== undefined) {
+    const language = normalizeLanguage(body.language)
+    if (!language) {
+      return calineError(c, 400, "INVALID_LANGUAGE", "Unsupported language")
+    }
+    patch.language = language
+  }
+
+  if (body.timezone !== undefined) {
+    if (typeof body.timezone !== "string" || !isValidTimezone(body.timezone)) {
+      return calineError(c, 400, "INVALID_TIMEZONE", "Invalid timezone")
+    }
+    patch.timezone = body.timezone
+  }
+
+  await updateUserFields(c.env.DB, prefix, userId, patch)
+  const user = await findUserById(c.env.DB, prefix, userId)
+  if (!user) {
+    return calineError(c, 404, "USER_NOT_FOUND", "User not found")
+  }
+  return calineSuccess(c, await buildUserView(c.env, user))
 })

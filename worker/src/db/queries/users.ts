@@ -166,6 +166,9 @@ export interface AdminUserView {
   status: UserStatus
   emailVerified: boolean
   createdAt: string
+  label?: string
+  avatar?: string
+  url?: string
 }
 
 /** 管理员用户列表：全量（可按状态过滤），按 id 升序。 */
@@ -175,7 +178,7 @@ export async function listUsers(
   status?: UserStatus
 ): Promise<AdminUserView[]> {
   const statement = db.prepare(
-    `SELECT id, email, display_name, role, status, email_verified, created_at
+    `SELECT id, email, display_name, role, status, email_verified, created_at, label, avatar, url
        FROM ${usersTable(prefix)}
       ${status ? "WHERE status = ?" : ""}
       ORDER BY id ASC`
@@ -188,6 +191,9 @@ export async function listUsers(
     status: UserStatus
     email_verified: number
     created_at: string
+    label: string
+    avatar: string
+    url: string
   }>()
   return rows.results.map((row) => ({
     id: row.id,
@@ -196,7 +202,10 @@ export async function listUsers(
     role: row.role,
     status: row.status,
     emailVerified: row.email_verified === 1,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    label: row.label || undefined,
+    avatar: row.avatar || undefined,
+    url: row.url || undefined
   }))
 }
 

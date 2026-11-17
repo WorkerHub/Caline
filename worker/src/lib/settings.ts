@@ -16,6 +16,11 @@ import { getSetting, isSetupPageEnabled, setSetting } from "./setup"
 import { getTablePrefix } from "./table-prefix"
 import { isEmailConfigured, readEmailSettings } from "../services/email"
 import type { EmailSettingsView } from "../services/email"
+import type {
+  CalineSiteSettings,
+  CalineSiteSettingsPatch,
+  GuestCommentMode
+} from "@caline/shared"
 import type { Env } from "../types"
 
 /** 构建信息未注入时的兜底版本号：必须非空、且仍是 `git describe` 的形态。 */
@@ -208,4 +213,168 @@ export async function writeSetupPageEnabled(
     "setup_page_enabled",
     enabled ? "1" : "0"
   )
+}
+
+// ─── 评论系统核心配置（规格 §5、§6、§8）──────────────────────────────────────
+
+export const DEFAULT_CALINE_SETTINGS: Omit<
+  CalineSiteSettings,
+  "turnstileSecretKeySet" | "enotifyKeySet"
+> = {
+  auditSwitch: false,
+  guestMode: "open",
+  reservedNicks: ["admin", "administrator"],
+  disallowedWords: [],
+  ipBlacklist: [],
+  maxContentLength: 1000,
+  ipRateLimitSeconds: 60,
+  levelThresholds: [],
+  gravatarMirror: "https://cravatar.cn/avatar/",
+  safeDomains: [],
+  turnstileEnabled: false,
+  turnstileSiteKey: "",
+  enotifyEnabled: false
+}
+
+export async function getTurnstileSecretKey(env: Env): Promise<string | null> {
+  const custom = await getSetting(
+    env.DB,
+    getTablePrefix(env),
+    "caline_turnstile_secret_key"
+  )
+  if (custom && custom.trim().length > 0) return custom.trim()
+  const fromEnv = (
+    (env as unknown as Record<string, string>).TURNSTILE_SECRET_KEY ?? ""
+  ).trim()
+  return fromEnv.length > 0 ? fromEnv : null
+}
+
+export async function getEnotifyKey(env: Env): Promise<string | null> {
+  const custom = await getSetting(
+    env.DB,
+    getTablePrefix(env),
+    "caline_enotify_key"
+  )
+  if (custom && custom.trim().length > 0) return custom.trim()
+  const fromEnv = (
+    (env as unknown as Record<string, string>).ENOTIFY_KEY ?? ""
+  ).trim()
+  return fromEnv.length > 0 ? fromEnv : null
+}
+
+export async function readCalineSettings(
+  env: Env
+): Promise<CalineSiteSettings> {
+  const raw = await getSetting(
+    env.DB,
+    getTablePrefix(env),
+    "caline_site_settings"
+  )
+  let parsed: Partial<typeof DEFAULT_CALINE_SETTINGS> = {}
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      parsed = {}
+    }
+  }
+
+  const turnstileSecret = await getTurnstileSecretKey(env)
+  const enotifyKey = await getEnotifyKey(env)
+
+  return {
+    auditSwitch: parsed.auditSwitch ?? DEFAULT_CALINE_SETTINGS.auditSwitch,
+    guestMode:
+      (parsed.guestMode as GuestCommentMode) ??
+      DEFAULT_CALINE_SETTINGS.guestMode,
+    reservedNicks: Array.isArray(parsed.reservedNicks)
+      ? parsed.reservedNicks
+      : DEFAULT_CALINE_SETTINGS.reservedNicks,
+    disallowedWords: Array.isArray(parsed.disallowedWords)
+      ? parsed.disallowedWords
+      : DEFAULT_CALINE_SETTINGS.disallowedWords,
+    ipBlacklist: Array.isArray(parsed.ipBlacklist)
+      ? parsed.ipBlacklist
+      : DEFAULT_CALINE_SETTINGS.ipBlacklist,
+    maxContentLength:
+      typeof parsed.maxContentLength === "number" && parsed.maxContentLength > 0
+        ? parsed.maxContentLength
+        : DEFAULT_CALINE_SETTINGS.maxContentLength,
+    ipRateLimitSeconds:
+      typeof parsed.ipRateLimitSeconds === "number"
+        ? parsed.ipRateLimitSeconds
+        : DEFAULT_CALINE_SETTINGS.ipRateLimitSeconds,
+    levelThresholds: Array.isArray(parsed.levelThresholds)
+      ? parsed.levelThresholds
+      : DEFAULT_CALINE_SETTINGS.levelThresholds,
+    gravatarMirror:
+      typeof parsed.gravatarMirror === "string" &&
+      parsed.gravatarMirror.trim().length > 0
+        ? parsed.gravatarMirror.trim()
+        : DEFAULT_CALINE_SETTINGS.gravatarMirror,
+    safeDomains: Array.isArray(parsed.safeDomains)
+      ? parsed.safeDomains
+      : DEFAULT_CALINE_SETTINGS.safeDomains,
+    turnstileEnabled:
+      parsed.turnstileEnabled ?? DEFAULT_CALINE_SETTINGS.turnstileEnabled,
+    turnstileSiteKey:
+      parsed.turnstileSiteKey ?? DEFAULT_CALINE_SETTINGS.turnstileSiteKey,
+    turnstileSecretKeySet: Boolean(turnstileSecret),
+    enotifyEnabled:
+      parsed.enotifyEnabled ?? DEFAULT_CALINE_SETTINGS.enotifyEnabled,
+    enotifyKeySet: Boolean(enotifyKey)
+  }
+}
+
+export async function writeCalineSettings(
+  env: Env,
+  patch: CalineSiteSettingsPatch
+): Promise<CalineSiteSettings> {
+  const current = await readCalineSettings(env)
+  const prefix = getTablePrefix(env)
+
+  if (patch.turnstileSecretKey !== undefined) {
+    await setSetting(
+      env.DB,
+      prefix,
+      "caline_turnstile_secret_key",
+      patch.turnstileSecretKey.trim()
+    )
+  }
+  if (patch.enotifyKey !== undefined) {
+    await setSetting(
+      env.DB,
+      prefix,
+      "caline_enotify_key",
+      patch.enotifyKey.trim()
+    )
+  }
+
+  const updatedJson: Omit<
+    CalineSiteSettings,
+    "turnstileSecretKeySet" | "enotifyKeySet"
+  > = {
+    auditSwitch: patch.auditSwitch ?? current.auditSwitch,
+    guestMode: patch.guestMode ?? current.guestMode,
+    reservedNicks: patch.reservedNicks ?? current.reservedNicks,
+    disallowedWords: patch.disallowedWords ?? current.disallowedWords,
+    ipBlacklist: patch.ipBlacklist ?? current.ipBlacklist,
+    maxContentLength: patch.maxContentLength ?? current.maxContentLength,
+    ipRateLimitSeconds: patch.ipRateLimitSeconds ?? current.ipRateLimitSeconds,
+    levelThresholds: patch.levelThresholds ?? current.levelThresholds,
+    gravatarMirror: patch.gravatarMirror ?? current.gravatarMirror,
+    safeDomains: patch.safeDomains ?? current.safeDomains,
+    turnstileEnabled: patch.turnstileEnabled ?? current.turnstileEnabled,
+    turnstileSiteKey: patch.turnstileSiteKey ?? current.turnstileSiteKey,
+    enotifyEnabled: patch.enotifyEnabled ?? current.enotifyEnabled
+  }
+
+  await setSetting(
+    env.DB,
+    prefix,
+    "caline_site_settings",
+    JSON.stringify(updatedJson)
+  )
+
+  return readCalineSettings(env)
 }

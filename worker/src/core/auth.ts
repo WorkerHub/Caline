@@ -41,7 +41,7 @@ export async function hmacSignatureHex(
 
 async function importHmacKey(
   key: string,
-  usages: string[]
+  usages: KeyUsage[]
 ): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     "raw",
