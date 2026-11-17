@@ -3,6 +3,9 @@ import type {
   AdminCreateUserResult,
   AdminSettings,
   AdminUser,
+  CalineDataDump,
+  CalineSiteSettings,
+  CommentAdminItem,
   Me,
   PublicInfo,
   SetupState
@@ -104,6 +107,122 @@ export function adminCreatedUser(
     role: "user",
     status: "active",
     temporaryPassword: "temp-2026",
+    ...overrides
+  }
+}
+
+export function commentItem(
+  overrides: Partial<CommentAdminItem> = {}
+): CommentAdminItem {
+  return {
+    id: 1,
+    userId: null,
+    nick: "Alice",
+    mail: "alice@example.com",
+    link: "https://alice.example.com",
+    url: "/posts/first",
+    pid: null,
+    rid: null,
+    contentRaw: "Hello world comment",
+    contentHtml: "<p>Hello world comment</p>",
+    status: "approved",
+    sticky: false,
+    likeCount: 0,
+    ip: "192.168.1.1",
+    ua: "Mozilla/5.0 Chrome/120.0",
+    createdAt: "2026-02-01T12:00:00.000Z",
+    updatedAt: "2026-02-01T12:00:00.000Z",
+    ...overrides
+  }
+}
+
+export function calineSiteSettings(
+  overrides: Partial<CalineSiteSettings> = {}
+): CalineSiteSettings {
+  return {
+    auditSwitch: false,
+    guestMode: "open",
+    reservedNicks: ["admin", "root"],
+    disallowedWords: ["spamword"],
+    ipBlacklist: ["10.0.0.1"],
+    maxContentLength: 1000,
+    ipRateLimitSeconds: 60,
+    levelThresholds: [0, 10, 50],
+    gravatarMirror: "https://cravatar.cn/avatar/",
+    safeDomains: ["example.com"],
+    turnstileEnabled: false,
+    turnstileSiteKey: "0x4AAAAAA",
+    turnstileSecretKeySet: true,
+    enotifyEnabled: false,
+    enotifyKeySet: false,
+    ...overrides
+  }
+}
+
+export function calineDataDump(
+  overrides: Partial<CalineDataDump> = {}
+): CalineDataDump {
+  return {
+    version: "1.0.0",
+    exportedAt: "2026-02-01T12:00:00.000Z",
+    comments: [
+      {
+        id: 1,
+        user_id: null,
+        nick: "Alice",
+        mail: "alice@example.com",
+        link: "https://alice.example.com",
+        url: "/posts/first",
+        pid: null,
+        rid: null,
+        content_raw: "Hello world comment",
+        content_html: "<p>Hello world comment</p>",
+        status: "approved",
+        sticky: 0,
+        like_count: 0,
+        edit_token_hash: null,
+        ip: "192.168.1.1",
+        ua: "Mozilla/5.0 Chrome/120.0",
+        created_at: "2026-02-01T12:00:00.000Z",
+        updated_at: "2026-02-01T12:00:00.000Z"
+      }
+    ],
+    counters: [
+      {
+        id: 1,
+        url: "/posts/first",
+        pageview: 10,
+        reaction0: 1,
+        reaction1: 0,
+        reaction2: 0,
+        reaction3: 0,
+        reaction4: 0,
+        reaction5: 0,
+        reaction6: 0,
+        reaction7: 0,
+        reaction8: 0,
+        created_at: "2026-02-01T12:00:00.000Z",
+        updated_at: "2026-02-01T12:00:00.000Z"
+      }
+    ],
+    users: [
+      {
+        id: 1,
+        email: "owner@example.com",
+        role: "admin",
+        status: "active",
+        email_verified: 1,
+        language: "zh",
+        display_name: "Owner",
+        timezone: "Asia/Shanghai",
+        created_at: "2026-02-01T12:00:00.000Z",
+        updated_at: "2026-02-01T12:00:00.000Z",
+        label: "Author",
+        avatar: "",
+        url: "",
+        github_id: null
+      }
+    ],
     ...overrides
   }
 }

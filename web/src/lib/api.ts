@@ -10,13 +10,24 @@
  */
 import type {
   AdminChangeRoleInput,
+  AdminCommentBatchInput,
+  AdminCommentBatchResult,
   AdminCreateUserInput,
   AdminCreateUserResult,
+  AdminDeleteCommentResult,
+  AdminImportInput,
+  AdminImportResult,
+  AdminListCommentsQuery,
+  AdminListCommentsResult,
   AdminResetPasswordResult,
   AdminSettings,
   AdminSettingsUpdate,
+  AdminUpdateCommentInput,
+  AdminUpdateUserInput,
   AdminUser,
   AdminUserActionResult,
+  CalineDataDump,
+  CommentAdminItem,
   LoginResult,
   Me,
   MeUpdateInput,
@@ -62,7 +73,7 @@ interface ErrorEnvelope {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PUT" | "DELETE"
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
   body?: unknown
   headers?: Record<string, string>
 }
@@ -324,6 +335,49 @@ export const adminApi = {
   deleteUser: (id: number) =>
     request<AdminUserActionResult>(`/admin/users/${id}/delete`, {
       method: "POST"
+    }),
+
+  updateUser: (id: number, input: AdminUpdateUserInput) =>
+    request<AdminUserActionResult>(`/admin/users/${id}`, {
+      method: "PATCH",
+      body: input
+    }),
+
+  comments: (query?: AdminListCommentsQuery) => {
+    const params = new URLSearchParams()
+    if (query?.status) params.set("status", query.status)
+    if (query?.q) params.set("q", query.q)
+    if (query?.page) params.set("page", String(query.page))
+    if (query?.pageSize) params.set("pageSize", String(query.pageSize))
+    const qs = params.toString()
+    return request<AdminListCommentsResult>(
+      `/admin/comments${qs ? `?${qs}` : ""}`
+    )
+  },
+
+  updateComment: (id: number, input: AdminUpdateCommentInput) =>
+    request<CommentAdminItem>(`/admin/comments/${id}`, {
+      method: "PATCH",
+      body: input
+    }),
+
+  deleteComment: (id: number) =>
+    request<AdminDeleteCommentResult>(`/admin/comments/${id}`, {
+      method: "DELETE"
+    }),
+
+  batchComments: (input: AdminCommentBatchInput) =>
+    request<AdminCommentBatchResult>("/admin/comments/batch", {
+      method: "POST",
+      body: input
+    }),
+
+  exportData: () => request<CalineDataDump>("/admin/export"),
+
+  importData: (input: AdminImportInput) =>
+    request<AdminImportResult>("/admin/import", {
+      method: "POST",
+      body: input
     }),
 
   runSetup: () => request<AdminSetupResult>("/admin/setup", { method: "POST" })
