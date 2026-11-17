@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { execSync } from "node:child_process"
-import { readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import {
   generateSql,
@@ -283,35 +284,63 @@ describe("Neon -> D1 迁移与抽查验证脚本", () => {
     }
   })
 
+  it("支持评论内容包含分号、代码块与 HTML 实体而不发生 SQL 语法切分截断", async () => {
+    const dataWithSemicolons = {
+      users: sampleNeonData.users,
+      counters: sampleNeonData.counters,
+      comments: [
+        {
+          objectId: "cmt_code_1",
+          url: "/posts/code",
+          nick: "Dev",
+          mail: "dev@example.com",
+          comment:
+            "```js\nconst a = 1; let b = 2;\nconsole.log(a + b);\n```\n&amp; &quot; &#39;",
+          content_html:
+            "<pre><code>const a = 1; let b = 2;\nconsole.log(a + b);</code></pre>&amp; &quot; &#39;",
+          createdAt: "2024-01-01T10:00:00.000Z"
+        }
+      ]
+    }
+
+    const transformed = await transformData(dataWithSemicolons, {
+      prefix: "caline_"
+    })
+    const sql = generateSql(transformed, "caline_")
+    const verifyResult = verifyInSqlite(sql, "caline_")
+
+    expect(verifyResult.success).toBe(true)
+    expect(verifyResult.report.counts.comments).toBe(1)
+  })
+
   it("CLI 端到端测试：写入 JSON 文件并执行 migrate-neon-to-d1.mjs --verify", () => {
-    const tmpDir = path.resolve(import.meta.dirname, "../.tmp-migration-test")
-    rmSync(tmpDir, { recursive: true, force: true })
-    execSync(`mkdir -p ${tmpDir}`)
+    const tmpDir = mkdtempSync(path.join(tmpdir(), "migration-test-"))
+    try {
+      const commentsFile = path.join(tmpDir, "wl_comment.json")
+      const countersFile = path.join(tmpDir, "wl_counter.json")
+      const usersFile = path.join(tmpDir, "wl_users.json")
+      const outFile = path.join(tmpDir, "out.sql")
 
-    const commentsFile = path.join(tmpDir, "wl_comment.json")
-    const countersFile = path.join(tmpDir, "wl_counter.json")
-    const usersFile = path.join(tmpDir, "wl_users.json")
-    const outFile = path.join(tmpDir, "out.sql")
+      writeFileSync(commentsFile, JSON.stringify(sampleNeonData.comments))
+      writeFileSync(countersFile, JSON.stringify(sampleNeonData.counters))
+      writeFileSync(usersFile, JSON.stringify(sampleNeonData.users))
 
-    writeFileSync(commentsFile, JSON.stringify(sampleNeonData.comments))
-    writeFileSync(countersFile, JSON.stringify(sampleNeonData.counters))
-    writeFileSync(usersFile, JSON.stringify(sampleNeonData.users))
+      const scriptPath = path.resolve(
+        import.meta.dirname,
+        "../../scripts/migrate-neon-to-d1.mjs"
+      )
+      const cmd = `node ${scriptPath} --dir ${tmpDir} --prefix caline_ --out ${outFile} --verify`
+      const output = execSync(cmd, { encoding: "utf8" })
 
-    const scriptPath = path.resolve(
-      import.meta.dirname,
-      "../../scripts/migrate-neon-to-d1.mjs"
-    )
-    const cmd = `node ${scriptPath} --dir ${tmpDir} --prefix caline_ --out ${outFile} --verify`
-    const output = execSync(cmd, { encoding: "utf8" })
+      expect(output).toContain("迁移抽查验证报告")
+      expect(output).toContain("迁移验证通过")
 
-    expect(output).toContain("迁移抽查验证报告")
-    expect(output).toContain("迁移验证通过")
-
-    const sqlContent = readFileSync(outFile, "utf8")
-    expect(sqlContent).toContain("INSERT INTO caline_users")
-    expect(sqlContent).toContain("INSERT INTO caline_comment")
-    expect(sqlContent).toContain("INSERT INTO caline_counter")
-
-    rmSync(tmpDir, { recursive: true, force: true })
+      const sqlContent = readFileSync(outFile, "utf8")
+      expect(sqlContent).toContain("INSERT INTO caline_users")
+      expect(sqlContent).toContain("INSERT INTO caline_comment")
+      expect(sqlContent).toContain("INSERT INTO caline_counter")
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 })

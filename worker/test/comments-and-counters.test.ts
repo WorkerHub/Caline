@@ -190,6 +190,14 @@ describe("数据模型（comment、counter 与 users 扩展列）", () => {
     expect(c3.pageview).toBe(2)
     expect(c3.reaction0).toBe(5)
     expect(c3.reaction1).toBe(2)
-    expect(c3.reaction2).toBe(0)
+    // 仅更新单个 reaction，已有 pageview 与其他 reaction 必须保留不归零
+    const c4 = await upsertCounter(env.DB, "caline_", {
+      url: "/articles/tech-scheme",
+      reaction3: 7
+    })
+    expect(c4.pageview).toBe(2)
+    expect(c4.reaction0).toBe(5)
+    expect(c4.reaction1).toBe(2)
+    expect(c4.reaction3).toBe(7)
   })
 })

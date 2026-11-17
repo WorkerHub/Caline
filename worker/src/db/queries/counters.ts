@@ -63,6 +63,18 @@ export async function upsertCounter(
   const createdAt = input.createdAt ?? now
   const updatedAt = input.updatedAt ?? now
 
+  // 构建 ON CONFLICT 更新子句：仅更新显式传入的计数列，未提供时保留已有值防覆盖归零
+  const updateClauses = ["updated_at = excluded.updated_at"]
+  if (input.pageview !== undefined) {
+    updateClauses.push("pageview = excluded.pageview")
+  }
+  for (let i = 0; i <= 8; i++) {
+    const key = `reaction${i}` as keyof UpsertCounterInput
+    if (input[key] !== undefined) {
+      updateClauses.push(`${key} = excluded.${key}`)
+    }
+  }
+
   await db
     .prepare(
       `INSERT INTO ${table}
@@ -70,17 +82,7 @@ export async function upsertCounter(
          reaction4, reaction5, reaction6, reaction7, reaction8, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(url) DO UPDATE SET
-         pageview = excluded.pageview,
-         reaction0 = excluded.reaction0,
-         reaction1 = excluded.reaction1,
-         reaction2 = excluded.reaction2,
-         reaction3 = excluded.reaction3,
-         reaction4 = excluded.reaction4,
-         reaction5 = excluded.reaction5,
-         reaction6 = excluded.reaction6,
-         reaction7 = excluded.reaction7,
-         reaction8 = excluded.reaction8,
-         updated_at = excluded.updated_at`
+         ${updateClauses.join(", ")}`
     )
     .bind(
       input.url,

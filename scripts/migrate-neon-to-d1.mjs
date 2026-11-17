@@ -400,20 +400,14 @@ export function verifyInSqlite(
     .join("\n")
     .replaceAll("{prefix}", prefix)
 
-  // 执行建表
-  for (const stmt of schemaSql.split(";")) {
-    const trimmed = stmt.trim()
-    if (trimmed) {
-      db.exec(trimmed)
-    }
+  // 1. 执行基线建表
+  if (schemaSql.trim()) {
+    db.exec(schemaSql)
   }
 
   // 2. 执行导入 SQL
-  for (const stmt of sqlStatements.split(";")) {
-    const trimmed = stmt.trim()
-    if (trimmed) {
-      db.exec(trimmed)
-    }
+  if (sqlStatements.trim()) {
+    db.exec(sqlStatements)
   }
 
   // 3. 验证抽查
