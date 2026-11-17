@@ -5,7 +5,7 @@
 
 import { CalineApiClient } from "../api/client"
 import { createTranslator, resolveLanguage } from "../i18n/locales"
-import { escapeHtml } from "../utils/markdown"
+import { escapeHtml, isSafeHttpUrl } from "../utils/markdown"
 
 export interface RecentCommentsOptions {
   serverURL: string
@@ -39,8 +39,9 @@ export async function recentComments(
     const html = items
       .map((item) => {
         const safeNick = escapeHtml(item.nick || t("guest"))
-        const safeLink = item.link ? escapeHtml(item.link) : ""
-        const nickHtml = safeLink
+        const hasSafeLink = isSafeHttpUrl(item.link)
+        const safeLink = hasSafeLink ? escapeHtml(item.link!.trim()) : ""
+        const nickHtml = hasSafeLink
           ? `<a href="${safeLink}" target="_blank" rel="nofollow ugc noopener" class="cl-recent-nick">${safeNick}</a>`
           : `<span class="cl-recent-nick">${safeNick}</span>`
 

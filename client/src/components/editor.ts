@@ -68,13 +68,14 @@ export function createEditor(props: EditorProps): HTMLElement {
     container.appendChild(replyBar)
   }
 
-  // 2. 身份输入三件套
+  // 2. 身份输入三件套与登录入口
   const metaInputs = document.createElement("div")
   metaInputs.className = "cl-editor-meta-inputs"
   metaInputs.innerHTML = `
     <input type="text" class="cl-input cl-input-nick" placeholder="${props.t("placeholder_nick")}" value="${profile.nick || ""}" required />
     <input type="email" class="cl-input cl-input-mail" placeholder="${props.t("placeholder_mail")}" value="${profile.mail || ""}" />
     <input type="url" class="cl-input cl-input-link" placeholder="${props.t("placeholder_link")}" value="${profile.link || ""}" />
+    <a href="${props.serverUrl}/login" target="_blank" rel="noopener" class="cl-login-link cl-editor-login-prompt" style="font-size:12px;display:inline-flex;align-items:center;text-decoration:none;padding:0 4px;color:var(--cl-color-text-muted);white-space:nowrap;">${props.t("login_prompt")}</a>
   `
   container.appendChild(metaInputs)
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from "vitest"
 import { resolveLanguage, createTranslator } from "../src/i18n/locales"
-import { renderMarkdownPreview } from "../src/utils/markdown"
+import { renderMarkdownPreview, isSafeHttpUrl } from "../src/utils/markdown"
 import {
   getGuestProfile,
   saveGuestProfile,
@@ -12,6 +12,8 @@ import {
 } from "../src/utils/storage"
 import { CalineApiClient } from "../src/api/client"
 import { commentCount, pageview } from "../src/widgets/counters"
+import { renderCommentTree } from "../src/components/comment-tree"
+import { createEditor } from "../src/components/editor"
 
 describe("Caline Client Widget", () => {
   beforeEach(() => {
@@ -215,6 +217,75 @@ Reply to @alice and @bob
       expect(
         document.querySelector("[data-caline-pageview]")?.textContent
       ).toBe("1024")
+    })
+  })
+
+  describe("Security fixes & reviewer items", () => {
+    it("isSafeHttpUrl validates protocols properly", () => {
+      expect(isSafeHttpUrl("https://example.com")).toBe(true)
+      expect(isSafeHttpUrl("http://example.com")).toBe(true)
+      expect(isSafeHttpUrl("javascript:alert(1)")).toBe(false)
+      expect(isSafeHttpUrl("data:text/html,abc")).toBe(false)
+      expect(isSafeHttpUrl("vbscript:msgbox(1)")).toBe(false)
+      expect(isSafeHttpUrl(undefined)).toBe(false)
+    })
+
+    it("prevents DOM XSS when editing comment with malicious content", async () => {
+      saveEditToken(1, "token_1")
+      const t = createTranslator("zh-CN")
+      const tree = renderCommentTree({
+        items: [
+          {
+            id: 1,
+            userId: null,
+            nick: "Attacker",
+            avatar: "avatar.png",
+            link: "javascript:alert(1)",
+            url: "/p/1",
+            contentHtml:
+              "&lt;/textarea&gt;&lt;script&gt;window.__xss=1&lt;/script&gt;",
+            sticky: false,
+            likeCount: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            replies: []
+          }
+        ],
+        t,
+        onReply: vi.fn(),
+        onLike: vi.fn(),
+        onUpdate: vi.fn(),
+        onDelete: vi.fn()
+      })
+
+      document.body.appendChild(tree)
+
+      // 验证 link: javascript: 不被渲染为可点击超链接，而是 <span>
+      const nickLink = tree.querySelector('a[href^="javascript:"]')
+      expect(nickLink).toBeNull()
+      expect(tree.querySelector(".cl-nick")?.tagName.toLowerCase()).toBe("span")
+
+      // 验证点击编辑时不会将内容直接拼接进 innerHTML 导致 textarea 逃逸
+      const editBtn = tree.querySelector(".cl-btn-edit") as HTMLButtonElement
+      editBtn.click()
+
+      expect((window as unknown as { __xss?: number }).__xss).toBeUndefined()
+      const textarea = tree.querySelector(".cl-textarea") as HTMLTextAreaElement
+      expect(textarea.value).toContain("</textarea><script>")
+      tree.remove()
+    })
+
+    it("renders login prompt in normal editor", () => {
+      const t = createTranslator("zh-CN")
+      const editor = createEditor({
+        t,
+        serverUrl: "https://example.com",
+        onSubmit: vi.fn()
+      })
+      const loginLink = editor.querySelector(".cl-editor-login-prompt")
+      expect(loginLink).not.toBeNull()
+      expect(loginLink?.getAttribute("href")).toBe("https://example.com/login")
+      expect(loginLink?.textContent).toBe(t("login_prompt"))
     })
   })
 })

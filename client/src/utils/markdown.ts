@@ -17,12 +17,18 @@ export function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;")
 }
 
-function sanitizeUrl(url: string): string {
+export function sanitizeUrl(url: string): string {
   const clean = url.trim().replace(/\s+/g, "")
   if (/^(?:javascript|data|vbscript):/i.test(clean)) {
     return "#"
   }
   return clean
+}
+
+export function isSafeHttpUrl(url?: string): boolean {
+  if (!url) return false
+  const clean = url.trim().replace(/\s+/g, "")
+  return /^https?:\/\//i.test(clean)
 }
 
 export function renderMarkdownPreview(markdown: string): string {

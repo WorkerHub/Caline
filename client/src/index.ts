@@ -259,7 +259,12 @@ export class CalineWidget {
     })
 
     replySlot.appendChild(editor)
-    targetEl.appendChild(replySlot)
+    const contentWrap = targetEl.querySelector(".cl-content-wrap")
+    if (contentWrap) {
+      contentWrap.appendChild(replySlot)
+    } else {
+      targetEl.appendChild(replySlot)
+    }
   }
 }
 

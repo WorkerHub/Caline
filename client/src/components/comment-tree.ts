@@ -4,7 +4,7 @@
 
 import type { CommentPublicItem, CommentPublicReplyItem } from "@caline/shared"
 import type { LocaleKey } from "../i18n/locales"
-import { escapeHtml } from "../utils/markdown"
+import { escapeHtml, isSafeHttpUrl } from "../utils/markdown"
 import {
   getEditToken,
   isCommentLiked,
@@ -53,8 +53,9 @@ function renderRootComment(
   const isLiked = isCommentLiked(item.id)
 
   const safeNick = escapeHtml(item.nick || props.t("guest"))
-  const safeLink = item.link ? escapeHtml(item.link) : ""
-  const nickHtml = safeLink
+  const hasSafeLink = isSafeHttpUrl(item.link)
+  const safeLink = hasSafeLink ? escapeHtml(item.link!.trim()) : ""
+  const nickHtml = hasSafeLink
     ? `<a href="${safeLink}" target="_blank" rel="nofollow ugc noopener" class="cl-nick">${safeNick}</a>`
     : `<span class="cl-nick">${safeNick}</span>`
 
@@ -146,8 +147,9 @@ function renderReplyComment(
   const isLiked = isCommentLiked(reply.id)
 
   const safeNick = escapeHtml(reply.nick || props.t("guest"))
-  const safeLink = reply.link ? escapeHtml(reply.link) : ""
-  const nickHtml = safeLink
+  const hasSafeLink = isSafeHttpUrl(reply.link)
+  const safeLink = hasSafeLink ? escapeHtml(reply.link!.trim()) : ""
+  const nickHtml = hasSafeLink
     ? `<a href="${safeLink}" target="_blank" rel="nofollow ugc noopener" class="cl-nick">${safeNick}</a>`
     : `<span class="cl-nick">${safeNick}</span>`
 
@@ -235,13 +237,21 @@ function bindEditActions(
 
     const editArea = document.createElement("div")
     editArea.style.marginTop = "8px"
-    editArea.innerHTML = `
-      <textarea class="cl-textarea" style="min-height:60px;">${(textContainer.textContent || "").trim()}</textarea>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button type="button" class="cl-btn cl-btn-primary cl-edit-save">${props.t("btn_save")}</button>
-        <button type="button" class="cl-btn cl-btn-secondary cl-edit-cancel">${props.t("btn_cancel")}</button>
-      </div>
+
+    const textarea = document.createElement("textarea")
+    textarea.className = "cl-textarea"
+    textarea.style.minHeight = "60px"
+    textarea.value = (textContainer.textContent || "").trim()
+
+    const btnRow = document.createElement("div")
+    btnRow.style.cssText = "display:flex;gap:8px;margin-top:6px;"
+    btnRow.innerHTML = `
+      <button type="button" class="cl-btn cl-btn-primary cl-edit-save">${props.t("btn_save")}</button>
+      <button type="button" class="cl-btn cl-btn-secondary cl-edit-cancel">${props.t("btn_cancel")}</button>
     `
+
+    editArea.appendChild(textarea)
+    editArea.appendChild(btnRow)
 
     const origDisplay = textContainer.style.display
     textContainer.style.display = "none"
@@ -255,8 +265,7 @@ function bindEditActions(
     editArea
       .querySelector(".cl-edit-save")
       ?.addEventListener("click", async () => {
-        const textarea = editArea.querySelector("textarea")
-        const val = textarea?.value.trim()
+        const val = textarea.value.trim()
         if (!val) return
 
         try {

@@ -36,7 +36,10 @@ export default defineConfig({
 
         if (fs.existsSync(jsFile)) {
           let jsContent = fs.readFileSync(jsFile, "utf8")
-          if (fs.existsSync(cssFile)) {
+          if (
+            fs.existsSync(cssFile) &&
+            !jsContent.includes('id="caline-style"')
+          ) {
             const cssContent = fs.readFileSync(cssFile, "utf8")
             const injectionCode = `\n(function(){if(typeof document!=="undefined"){var st=document.getElementById("caline-style");if(!st){st=document.createElement("style");st.id="caline-style";st.textContent=${JSON.stringify(cssContent)};document.head.appendChild(st);}}})();\n`
             jsContent = injectionCode + jsContent
