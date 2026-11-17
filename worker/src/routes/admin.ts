@@ -23,15 +23,45 @@ import {
   type UserStatus,
   updateUserFields
 } from "../db/queries/users"
-import { apiError, readJsonBody } from "../lib/http"
+import { apiError, calineError, calineSuccess, readJsonBody } from "../lib/http"
 import {
   buildAdminSettings,
+  readCalineSettings,
+  writeCalineSettings,
   type ProfileLockSettingsPatch,
   type RegistrationSettingsPatch,
   writeProfileLockSettings,
   writeRegistrationSettings,
   writeSetupPageEnabled
 } from "../lib/settings"
+import {
+  adminBatchDelete,
+  adminBatchUpdateStatus,
+  adminSearchComments,
+  adminUpdateCommentFields,
+  deleteCommentCascade,
+  findCommentById
+} from "../db/queries/comments"
+import { renderAndSanitizeMarkdown } from "../core/pipeline"
+import { commentTable, counterTable, usersTable } from "../lib/tables"
+import type {
+  AdminCommentBatchInput,
+  AdminCommentBatchResult,
+  AdminDeleteCommentResult,
+  AdminImportInput,
+  AdminImportResult,
+  AdminListCommentsResult,
+  AdminUpdateCommentInput,
+  AdminUpdateUserInput,
+  CalineDataDump,
+  CalineSiteSettingsPatch,
+  CommentAdminItem,
+  CommentStatus,
+  ExportCommentRow,
+  ExportCounterRow,
+  ExportUserRow
+} from "@caline/shared"
+
 import { runSetup } from "../lib/setup"
 import { getTablePrefix } from "../lib/table-prefix"
 import { isValidTimezone } from "../lib/timezone"
@@ -65,7 +95,9 @@ adminRoutes.post("/setup", async (c) => {
 })
 
 adminRoutes.get("/settings", async (c) => {
-  return c.json(await buildAdminSettings(c.env))
+  const base = await buildAdminSettings(c.env)
+  const site = await readCalineSettings(c.env)
+  return c.json({ ...base, site })
 })
 
 adminRoutes.put("/settings", async (c) => {
@@ -74,6 +106,7 @@ adminRoutes.put("/settings", async (c) => {
     profileLocks?: ProfileLockSettingsPatch
     setup?: { pageEnabled?: boolean }
     email?: EmailSettingsPatch
+    site?: CalineSiteSettingsPatch
   }>(c)
   if (!body) {
     return apiError(c, 400, "INVALID_EMAIL", "Invalid request body")
@@ -139,7 +172,13 @@ adminRoutes.put("/settings", async (c) => {
     }
   }
 
-  return c.json(await buildAdminSettings(c.env))
+  if (body.site !== undefined) {
+    await writeCalineSettings(c.env, body.site)
+  }
+
+  const base = await buildAdminSettings(c.env)
+  const site = await readCalineSettings(c.env)
+  return c.json({ ...base, site })
 })
 
 adminRoutes.post("/settings/test-email", async (c) => {
@@ -182,7 +221,6 @@ adminRoutes.post("/settings/test-email", async (c) => {
 
 adminRoutes.get("/users", async (c) => {
   // 全量用户（管理员用户列表）；`?status=` 可选，缺省返回全部。
-  // 列表包裹字段与 /api/me/passkeys 一致：冻结契约为 { items }。
   let status: UserStatus | undefined
   const rawStatus = c.req.query("status")
   if (rawStatus !== undefined) {
@@ -192,7 +230,8 @@ adminRoutes.get("/users", async (c) => {
     status = rawStatus
   }
   const prefix = getTablePrefix(c.env)
-  return c.json({ items: await listUsers(c.env.DB, prefix, status) })
+  const items = await listUsers(c.env.DB, prefix, status)
+  return c.json({ items, data: { items } })
 })
 
 adminRoutes.post("/users/:id/approve", async (c) => {
@@ -438,4 +477,415 @@ adminRoutes.post("/users/:id/delete", async (c) => {
 
   await deleteUser(c.env.DB, prefix, id)
   return c.json({ success: true })
+})
+
+adminRoutes.delete("/users/:id", async (c) => {
+  const id = Number(c.req.param("id"))
+  if (!Number.isInteger(id)) {
+    return apiError(c, 404, "USER_NOT_FOUND", "User not found")
+  }
+  if (id === c.get("userId")) {
+    return apiError(
+      c,
+      403,
+      "SELF_ACTION_FORBIDDEN",
+      "Cannot delete your own account"
+    )
+  }
+  const prefix = getTablePrefix(c.env)
+  const user = await findUserById(c.env.DB, prefix, id)
+  if (!user) return apiError(c, 404, "USER_NOT_FOUND", "User not found")
+
+  if (user.role === "admin" && user.status === "active") {
+    if ((await countActiveAdmins(c.env.DB, prefix)) <= 1) {
+      return apiError(c, 409, "LAST_ADMIN", "Cannot delete the last admin")
+    }
+  }
+
+  await deleteUser(c.env.DB, prefix, id)
+  return c.json({ success: true })
+})
+
+adminRoutes.patch("/users/:id", async (c) => {
+  const id = Number(c.req.param("id"))
+  if (!Number.isInteger(id)) {
+    return calineError(c, 404, "USER_NOT_FOUND", "User not found")
+  }
+
+  const body = await readJsonBody<AdminUpdateUserInput>(c)
+  if (!body) {
+    return calineError(c, 400, "INVALID_REQUEST", "Invalid request body")
+  }
+
+  const prefix = getTablePrefix(c.env)
+  const user = await findUserById(c.env.DB, prefix, id)
+  if (!user) {
+    return calineError(c, 404, "USER_NOT_FOUND", "User not found")
+  }
+
+  const patch: Parameters<typeof updateUserFields>[3] = {}
+
+  if (body.role !== undefined) {
+    if (body.role !== "admin" && body.role !== "user") {
+      return calineError(c, 400, "INVALID_ROLE", "Role must be admin or user")
+    }
+    // 降级护栏
+    if (
+      user.role === "admin" &&
+      body.role === "user" &&
+      user.status === "active"
+    ) {
+      if ((await countActiveAdmins(c.env.DB, prefix)) <= 1) {
+        return calineError(c, 409, "LAST_ADMIN", "Cannot demote the last admin")
+      }
+    }
+    patch.role = body.role
+  }
+
+  if (body.status !== undefined) {
+    if (
+      body.status !== "active" &&
+      body.status !== "pending" &&
+      body.status !== "disabled"
+    ) {
+      return calineError(c, 400, "INVALID_STATUS", "Invalid status")
+    }
+    if (body.status === "disabled") {
+      if (id === c.get("userId")) {
+        return calineError(
+          c,
+          403,
+          "SELF_ACTION_FORBIDDEN",
+          "Cannot disable your own account"
+        )
+      }
+      if (user.role === "admin" && user.status === "active") {
+        if ((await countActiveAdmins(c.env.DB, prefix)) <= 1) {
+          return calineError(
+            c,
+            409,
+            "LAST_ADMIN",
+            "Cannot disable the last admin"
+          )
+        }
+      }
+      await revokeAllSessions(c.env.DB, prefix, id)
+    }
+    patch.status = body.status
+  }
+
+  if (body.label !== undefined) {
+    patch.label =
+      typeof body.label === "string" ? body.label.trim().slice(0, 50) : ""
+  }
+
+  await updateUserFields(c.env.DB, prefix, id, patch)
+  return calineSuccess(c, { success: true })
+})
+
+// ─── 评论治理（规格 §4、§5、§6）──────────────────────────────────────────────────
+
+adminRoutes.get("/comments", async (c) => {
+  const status = c.req.query("status")
+  const q = c.req.query("q")
+  const rawPage = Number(c.req.query("page"))
+  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1
+  const rawPageSize = Number(c.req.query("pageSize"))
+  const pageSize =
+    Number.isInteger(rawPageSize) && rawPageSize > 0 && rawPageSize <= 100
+      ? rawPageSize
+      : 10
+
+  const prefix = getTablePrefix(c.env)
+  const { items: rows, total } = await adminSearchComments(c.env.DB, prefix, {
+    status,
+    q,
+    page,
+    pageSize
+  })
+
+  const items: CommentAdminItem[] = rows.map((r) => ({
+    id: r.id,
+    userId: r.user_id,
+    nick: r.nick,
+    mail: r.mail,
+    link: r.link,
+    url: r.url,
+    pid: r.pid,
+    rid: r.rid,
+    contentRaw: r.content_raw,
+    contentHtml: r.content_html,
+    status: r.status,
+    sticky: r.sticky === 1,
+    likeCount: r.like_count,
+    ip: r.ip,
+    ua: r.ua,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  }))
+
+  const result: AdminListCommentsResult = {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize)
+  }
+
+  return calineSuccess(c, result)
+})
+
+adminRoutes.patch("/comments/:id", async (c) => {
+  const id = Number(c.req.param("id"))
+  if (!Number.isInteger(id)) {
+    return calineError(c, 404, "COMMENT_NOT_FOUND", "Comment not found")
+  }
+
+  const body = await readJsonBody<AdminUpdateCommentInput>(c)
+  if (!body) {
+    return calineError(c, 400, "INVALID_REQUEST", "Invalid request body")
+  }
+
+  const prefix = getTablePrefix(c.env)
+  const existing = await findCommentById(c.env.DB, prefix, id)
+  if (!existing) {
+    return calineError(c, 404, "COMMENT_NOT_FOUND", "Comment not found")
+  }
+
+  let contentHtml: string | undefined
+  if (body.content !== undefined) {
+    contentHtml = await renderAndSanitizeMarkdown(body.content)
+  }
+
+  const updated = await adminUpdateCommentFields(c.env.DB, prefix, id, {
+    status: body.status,
+    sticky: body.sticky !== undefined ? (body.sticky ? 1 : 0) : undefined,
+    contentRaw: body.content,
+    contentHtml
+  })
+
+  return calineSuccess(c, updated)
+})
+
+adminRoutes.delete("/comments/:id", async (c) => {
+  const id = Number(c.req.param("id"))
+  if (!Number.isInteger(id)) {
+    return calineError(c, 404, "COMMENT_NOT_FOUND", "Comment not found")
+  }
+
+  const prefix = getTablePrefix(c.env)
+  const existing = await findCommentById(c.env.DB, prefix, id)
+  if (!existing) {
+    return calineError(c, 404, "COMMENT_NOT_FOUND", "Comment not found")
+  }
+
+  const deletedIds = await deleteCommentCascade(c.env.DB, prefix, id)
+
+  const result: AdminDeleteCommentResult = {
+    success: true,
+    deletedId: id,
+    deletedCount: deletedIds.length,
+    deletedIds
+  }
+
+  return calineSuccess(c, result)
+})
+
+adminRoutes.post("/comments/batch", async (c) => {
+  const body = await readJsonBody<AdminCommentBatchInput>(c)
+  if (!body || !Array.isArray(body.ids) || !body.action) {
+    return calineError(c, 400, "INVALID_REQUEST", "Invalid batch input")
+  }
+
+  const prefix = getTablePrefix(c.env)
+  let affectedCount = 0
+
+  if (body.action === "delete") {
+    affectedCount = await adminBatchDelete(c.env.DB, prefix, body.ids)
+  } else {
+    const statusMap: Record<string, CommentStatus> = {
+      approve: "approved",
+      spam: "spam",
+      waiting: "waiting"
+    }
+    const targetStatus = statusMap[body.action]
+    if (!targetStatus) {
+      return calineError(c, 400, "INVALID_ACTION", "Invalid batch action")
+    }
+    affectedCount = await adminBatchUpdateStatus(
+      c.env.DB,
+      prefix,
+      body.ids,
+      targetStatus
+    )
+  }
+
+  const result: AdminCommentBatchResult = {
+    success: true,
+    affectedCount
+  }
+
+  return calineSuccess(c, result)
+})
+
+// ─── 数据备份导出与导入（规格 §11）──────────────────────────────────────────────
+
+adminRoutes.get("/export", async (c) => {
+  const prefix = getTablePrefix(c.env)
+
+  const commentsRows = await c.env.DB.prepare(
+    `SELECT * FROM ${commentTable(prefix)} ORDER BY id ASC`
+  ).all<ExportCommentRow>()
+
+  const countersRows = await c.env.DB.prepare(
+    `SELECT * FROM ${counterTable(prefix)} ORDER BY id ASC`
+  ).all<ExportCounterRow>()
+
+  const usersRows = await c.env.DB.prepare(
+    `SELECT id, email, role, status, email_verified, language,
+              display_name, timezone, created_at, updated_at,
+              label, avatar, url, github_id
+         FROM ${usersTable(prefix)}
+        ORDER BY id ASC`
+  ).all<ExportUserRow>()
+
+  const dump: CalineDataDump = {
+    version: "1.0.0",
+    exportedAt: new Date().toISOString(),
+    comments: commentsRows.results,
+    counters: countersRows.results,
+    users: usersRows.results
+  }
+
+  return calineSuccess(c, dump)
+})
+
+adminRoutes.post("/import", async (c) => {
+  const body = await readJsonBody<AdminImportInput>(c)
+  if (!body?.data || typeof body.data !== "object") {
+    return calineError(c, 400, "INVALID_REQUEST", "Invalid import dump data")
+  }
+
+  const prefix = getTablePrefix(c.env)
+  const dump = body.data
+
+  const existingComments = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM ${commentTable(prefix)}`
+  ).first<{ total: number }>()
+  const existingCounters = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM ${counterTable(prefix)}`
+  ).first<{ total: number }>()
+
+  const hasData =
+    Number(existingComments?.total ?? 0) > 0 ||
+    Number(existingCounters?.total ?? 0) > 0
+
+  if (hasData && body.overwrite !== true) {
+    return calineError(
+      c,
+      409,
+      "CONFIRM_OVERWRITE",
+      "Existing comments or counters detected. Set overwrite: true to confirm replacement."
+    )
+  }
+
+  // 覆盖导入：清空当前评论与计数表
+  await c.env.DB.batch([
+    c.env.DB.prepare(`DELETE FROM ${commentTable(prefix)}`),
+    c.env.DB.prepare(`DELETE FROM ${counterTable(prefix)}`)
+  ])
+
+  let importedComments = 0
+  if (Array.isArray(dump.comments) && dump.comments.length > 0) {
+    const stmts: D1PreparedStatement[] = []
+    for (const item of dump.comments) {
+      stmts.push(
+        c.env.DB.prepare(
+          `INSERT INTO ${commentTable(prefix)}
+            (id, user_id, nick, mail, link, url, pid, rid,
+             content_raw, content_html, status, sticky, like_count,
+             edit_token_hash, ip, ua, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          item.id,
+          item.user_id ?? null,
+          item.nick ?? "",
+          item.mail ?? "",
+          item.link ?? "",
+          item.url,
+          item.pid ?? null,
+          item.rid ?? null,
+          item.content_raw ?? "",
+          item.content_html ?? "",
+          item.status ?? "approved",
+          item.sticky ?? 0,
+          item.like_count ?? 0,
+          item.edit_token_hash ?? null,
+          item.ip ?? "",
+          item.ua ?? "",
+          item.created_at ?? new Date().toISOString(),
+          item.updated_at ?? new Date().toISOString()
+        )
+      )
+    }
+    await c.env.DB.batch(stmts)
+    importedComments = dump.comments.length
+  }
+
+  let importedCounters = 0
+  if (Array.isArray(dump.counters) && dump.counters.length > 0) {
+    const stmts: D1PreparedStatement[] = []
+    for (const item of dump.counters) {
+      stmts.push(
+        c.env.DB.prepare(
+          `INSERT INTO ${counterTable(prefix)}
+            (id, url, pageview, reaction0, reaction1, reaction2, reaction3,
+             reaction4, reaction5, reaction6, reaction7, reaction8, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          item.id,
+          item.url,
+          item.pageview ?? 0,
+          item.reaction0 ?? 0,
+          item.reaction1 ?? 0,
+          item.reaction2 ?? 0,
+          item.reaction3 ?? 0,
+          item.reaction4 ?? 0,
+          item.reaction5 ?? 0,
+          item.reaction6 ?? 0,
+          item.reaction7 ?? 0,
+          item.reaction8 ?? 0,
+          item.created_at ?? new Date().toISOString(),
+          item.updated_at ?? new Date().toISOString()
+        )
+      )
+    }
+    await c.env.DB.batch(stmts)
+    importedCounters = dump.counters.length
+  }
+
+  let importedUsers = 0
+  if (Array.isArray(dump.users) && dump.users.length > 0) {
+    for (const u of dump.users) {
+      const existing = await findUserById(c.env.DB, prefix, u.id)
+      if (existing) {
+        await updateUserFields(c.env.DB, prefix, u.id, {
+          label: u.label,
+          avatar: u.avatar,
+          url: u.url,
+          display_name: u.display_name || existing.display_name
+        })
+        importedUsers++
+      }
+    }
+  }
+
+  const result: AdminImportResult = {
+    success: true,
+    importedComments,
+    importedCounters,
+    importedUsers
+  }
+
+  return calineSuccess(c, result)
 })
