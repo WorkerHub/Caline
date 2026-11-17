@@ -30,10 +30,16 @@ export interface UserRow {
   updated_at: string
   /** 首登强制改密标记：1 = 需改密（管理员建号），0 = 无需。 */
   must_change_password: number
+  /** 评论展示与 OAuth 扩展列（规格 §3） */
+  label: string
+  avatar: string
+  url: string
+  github_id: string | null
 }
 
 const USER_COLUMNS = `id, email, password_hash, role, status, email_verified,
-  language, display_name, timezone, created_at, updated_at, must_change_password`
+  language, display_name, timezone, created_at, updated_at, must_change_password,
+  label, avatar, url, github_id`
 
 export async function findUserByEmail(
   db: D1Database,
@@ -113,7 +119,11 @@ const UPDATABLE_FIELDS = [
   "language",
   "display_name",
   "timezone",
-  "must_change_password"
+  "must_change_password",
+  "label",
+  "avatar",
+  "url",
+  "github_id"
 ] as const
 
 export type UpdatableField = (typeof UPDATABLE_FIELDS)[number]
@@ -123,10 +133,10 @@ export async function updateUserFields(
   db: D1Database,
   prefix: string,
   id: number,
-  patch: Partial<Record<UpdatableField, string | number>>
+  patch: Partial<Record<UpdatableField, string | number | null>>
 ): Promise<void> {
   const assignments: string[] = []
-  const values: Array<string | number> = []
+  const values: Array<string | number | null> = []
   for (const field of UPDATABLE_FIELDS) {
     const value = patch[field]
     if (value === undefined) continue

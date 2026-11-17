@@ -24,6 +24,15 @@ export const emailCodesTable = (prefix: string) =>
   tableName(prefix, "email_verification_codes")
 export const settingsTable = (prefix: string) =>
   tableName(prefix, "system_settings")
+
+/**
+ * 评论系统核心业务表（规格 §3）：
+ * - comment 表（包含楼层、状态、访客信息、点赞等）
+ * - counter 表（页面浏览量与 reaction0..8 计数）
+ */
+export const commentTable = (prefix: string) => tableName(prefix, "comment")
+export const counterTable = (prefix: string) => tableName(prefix, "counter")
+
 /**
  * 限流与连续失败锁定的计数表（规格 §5.2 表清单内的基础设施表，经裁决增列）。
  * setup 限流在迁移之前就要生效，因此 `core/counters.ts` 会用 schema.ts 的同一份
@@ -31,6 +40,7 @@ export const settingsTable = (prefix: string) =>
  */
 export const countersTable = (prefix: string) =>
   tableName(prefix, "auth_counters")
+export const authCountersTable = countersTable
 
 /**
  * 迁移账本（规格 §5.1）：表名带前导下划线、排在业务表之前——
