@@ -95,8 +95,10 @@ export function SiteSettingsPage() {
 
     const parsedThresholds = levelThresholds
       .split(",")
-      .map((s) => Number(s.trim()))
-      .filter((n) => Number.isFinite(n))
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map(Number)
+      .filter(Number.isFinite)
 
     const patch: CalineSiteSettingsPatch = {
       auditSwitch,

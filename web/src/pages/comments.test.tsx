@@ -121,7 +121,7 @@ describe("评论管理页", () => {
       expect.objectContaining({ q: "关键词" })
     )
 
-    await user.click(screen.getByRole("button", { name: "取消选择" }))
+    await user.click(screen.getByRole("button", { name: "清空搜索" }))
     expect(adminApi.comments).toHaveBeenCalledWith(
       expect.objectContaining({ q: undefined })
     )
@@ -149,7 +149,7 @@ describe("评论管理页", () => {
     const user = menuUser()
     renderComments()
 
-    await user.click(await screen.findByRole("button", { name: "编辑" }))
+    await user.click(await screen.findByRole("button", { name: "操作" }))
     const menu = await screen.findByRole("menu")
     await user.click(within(menu).getByRole("menuitem", { name: "通过" }))
 
@@ -173,7 +173,7 @@ describe("评论管理页", () => {
     const user = menuUser()
     renderComments()
 
-    await user.click(await screen.findByRole("button", { name: "编辑" }))
+    await user.click(await screen.findByRole("button", { name: "操作" }))
     const menu = await screen.findByRole("menu")
     await user.click(within(menu).getByRole("menuitem", { name: "编辑" }))
 
@@ -210,7 +210,7 @@ describe("评论管理页", () => {
     const user = menuUser()
     renderComments()
 
-    await user.click(await screen.findByRole("button", { name: "编辑" }))
+    await user.click(await screen.findByRole("button", { name: "操作" }))
     const menu = await screen.findByRole("menu")
     await user.click(within(menu).getByRole("menuitem", { name: "删除" }))
 

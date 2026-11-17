@@ -379,6 +379,7 @@
       "approved": "已通过"
     },
     "searchPlaceholder": "搜索评论、昵称、邮箱或网址…",
+    "searchClear": "清空搜索",
     "empty": "暂无评论",
     "actions": {
       "approve": "通过",
@@ -391,6 +392,7 @@
     },
     "batch": {
       "selected": "已选择 {{count}} 项",
+      "selectAll": "全选",
       "clear": "取消选择",
       "confirmDeleteTitle": "批量删除评论",
       "confirmDeleteDescription": "确定删除选中的 {{count}} 条评论？此操作无法撤销。"
@@ -421,7 +423,8 @@
       "page": "所属页面",
       "ip": "IP",
       "ua": "UA",
-      "date": "时间"
+      "date": "时间",
+      "actions": "操作"
     }
   },
   "siteSettings": {

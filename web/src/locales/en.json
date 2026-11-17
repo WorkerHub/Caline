@@ -379,6 +379,7 @@
       "approved": "Approved"
     },
     "searchPlaceholder": "Search comments, author, email, or URL…",
+    "searchClear": "Clear search",
     "empty": "No comments found",
     "actions": {
       "approve": "Approve",
@@ -391,6 +392,7 @@
     },
     "batch": {
       "selected": "{{count}} selected",
+      "selectAll": "Select all",
       "clear": "Clear selection",
       "confirmDeleteTitle": "Delete comments",
       "confirmDeleteDescription": "Are you sure you want to delete {{count}} selected comments? This cannot be undone."
@@ -421,7 +423,8 @@
       "page": "Page",
       "ip": "IP",
       "ua": "UA",
-      "date": "Date"
+      "date": "Date",
+      "actions": "Actions"
     }
   },
   "siteSettings": {

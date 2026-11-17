@@ -294,7 +294,7 @@ export function CommentsPage() {
               type="button"
               onClick={handleClearSearch}
               className="absolute right-2.5 text-muted-foreground hover:text-foreground"
-              aria-label={t("comments.batch.clear")}
+              aria-label={t("comments.searchClear")}
             >
               <XIcon className="size-4" aria-hidden="true" />
             </button>
@@ -329,7 +329,7 @@ export function CommentsPage() {
                       selectedIds.length === items.length
                     }
                     onChange={toggleSelectAll}
-                    aria-label={t("comments.batch.clear")}
+                    aria-label={t("comments.batch.selectAll")}
                     className="size-4 rounded border-input"
                   />
                 </TableHead>
@@ -341,7 +341,7 @@ export function CommentsPage() {
                   {t("comments.meta.page")}
                 </TableHead>
                 <TableHead className="text-right">
-                  {t("common.actions.confirm")}
+                  {t("comments.meta.actions")}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -439,7 +439,7 @@ export function CommentsPage() {
                           variant="ghost"
                           size="icon-sm"
                           disabled={busyId === item.id}
-                          aria-label={t("comments.actions.edit")}
+                          aria-label={t("comments.meta.actions")}
                         >
                           <EllipsisIcon className="size-4" aria-hidden="true" />
                         </Button>

@@ -149,6 +149,32 @@ describe("站点系统设置页", () => {
     )
   })
 
+  it("清空等级阈值时提交空数组 []，不产生 [0]", async () => {
+    const initialSite = calineSiteSettings({ levelThresholds: [0, 10, 50] })
+    vi.mocked(adminApi.settings).mockResolvedValue(
+      adminSettings({ site: initialSite })
+    )
+    vi.mocked(adminApi.updateSettings).mockResolvedValue(
+      adminSettings({ site: { ...initialSite, levelThresholds: [] } })
+    )
+
+    const user = userEvent.setup()
+    renderSiteSettings()
+
+    const thresholdsInput = await screen.findByLabelText("等级阈值")
+    await user.clear(thresholdsInput)
+
+    await user.click(screen.getByRole("button", { name: "保存" }))
+
+    await waitFor(() =>
+      expect(adminApi.updateSettings).toHaveBeenCalledWith({
+        site: expect.objectContaining({
+          levelThresholds: []
+        })
+      })
+    )
+  })
+
   it("加载失败或保存失败时展示错误提示", async () => {
     vi.mocked(adminApi.settings).mockRejectedValue(
       new ApiError({ status: 500, message: "Load failed" })
