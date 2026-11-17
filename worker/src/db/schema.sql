@@ -17,7 +17,11 @@ CREATE TABLE IF NOT EXISTS {prefix}users (
   timezone             TEXT NOT NULL DEFAULT 'Asia/Shanghai',
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL,
-  must_change_password INTEGER NOT NULL DEFAULT 0
+  must_change_password INTEGER NOT NULL DEFAULT 0,
+  label                TEXT NOT NULL DEFAULT '',
+  avatar               TEXT NOT NULL DEFAULT '',
+  url                  TEXT NOT NULL DEFAULT '',
+  github_id            TEXT
 );
 
 CREATE TABLE IF NOT EXISTS {prefix}user_2fa (
@@ -78,6 +82,47 @@ CREATE TABLE IF NOT EXISTS {prefix}auth_counters (
   updated_at   INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS {prefix}comment (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER,
+  nick            TEXT NOT NULL DEFAULT '',
+  mail            TEXT NOT NULL DEFAULT '',
+  link            TEXT NOT NULL DEFAULT '',
+  url             TEXT NOT NULL,
+  pid             INTEGER,
+  rid             INTEGER,
+  content_raw     TEXT NOT NULL DEFAULT '',
+  content_html    TEXT NOT NULL DEFAULT '',
+  status          TEXT NOT NULL DEFAULT 'approved',
+  sticky          INTEGER NOT NULL DEFAULT 0,
+  like_count      INTEGER NOT NULL DEFAULT 0,
+  edit_token_hash TEXT,
+  ip              TEXT NOT NULL DEFAULT '',
+  ua              TEXT NOT NULL DEFAULT '',
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS {prefix}counter (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  url        TEXT NOT NULL UNIQUE,
+  pageview   INTEGER NOT NULL DEFAULT 0,
+  reaction0  INTEGER NOT NULL DEFAULT 0,
+  reaction1  INTEGER NOT NULL DEFAULT 0,
+  reaction2  INTEGER NOT NULL DEFAULT 0,
+  reaction3  INTEGER NOT NULL DEFAULT 0,
+  reaction4  INTEGER NOT NULL DEFAULT 0,
+  reaction5  INTEGER NOT NULL DEFAULT 0,
+  reaction6  INTEGER NOT NULL DEFAULT 0,
+  reaction7  INTEGER NOT NULL DEFAULT 0,
+  reaction8  INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_{prefix}users_github_id
+  ON {prefix}users(github_id) WHERE github_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_{prefix}passkeys_user
   ON {prefix}passkey_credentials(user_id);
 
@@ -95,3 +140,12 @@ CREATE INDEX IF NOT EXISTS idx_{prefix}email_codes_expires
 
 CREATE INDEX IF NOT EXISTS idx_{prefix}auth_counters_action_account
   ON {prefix}auth_counters(action, account);
+
+CREATE INDEX IF NOT EXISTS idx_{prefix}comment_url_status_created
+  ON {prefix}comment(url, status, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_{prefix}comment_status_created
+  ON {prefix}comment(status, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_{prefix}comment_rid
+  ON {prefix}comment(rid);

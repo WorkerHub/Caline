@@ -39,7 +39,11 @@ export const SCHEMA_TABLES: SchemaTable[] = [
   timezone             TEXT NOT NULL DEFAULT 'Asia/Shanghai',
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL,
-  must_change_password INTEGER NOT NULL DEFAULT 0
+  must_change_password INTEGER NOT NULL DEFAULT 0,
+  label                TEXT NOT NULL DEFAULT '',
+  avatar               TEXT NOT NULL DEFAULT '',
+  url                  TEXT NOT NULL DEFAULT '',
+  github_id            TEXT
 )`
   },
   {
@@ -111,6 +115,48 @@ export const SCHEMA_TABLES: SchemaTable[] = [
   locked_until INTEGER,
   updated_at   INTEGER NOT NULL
 )`
+  },
+  {
+    name: "comment",
+    ddl: `CREATE TABLE IF NOT EXISTS {table} (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER,
+  nick            TEXT NOT NULL DEFAULT '',
+  mail            TEXT NOT NULL DEFAULT '',
+  link            TEXT NOT NULL DEFAULT '',
+  url             TEXT NOT NULL,
+  pid             INTEGER,
+  rid             INTEGER,
+  content_raw     TEXT NOT NULL DEFAULT '',
+  content_html    TEXT NOT NULL DEFAULT '',
+  status          TEXT NOT NULL DEFAULT 'approved',
+  sticky          INTEGER NOT NULL DEFAULT 0,
+  like_count      INTEGER NOT NULL DEFAULT 0,
+  edit_token_hash TEXT,
+  ip              TEXT NOT NULL DEFAULT '',
+  ua              TEXT NOT NULL DEFAULT '',
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+)`
+  },
+  {
+    name: "counter",
+    ddl: `CREATE TABLE IF NOT EXISTS {table} (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  url        TEXT NOT NULL UNIQUE,
+  pageview   INTEGER NOT NULL DEFAULT 0,
+  reaction0  INTEGER NOT NULL DEFAULT 0,
+  reaction1  INTEGER NOT NULL DEFAULT 0,
+  reaction2  INTEGER NOT NULL DEFAULT 0,
+  reaction3  INTEGER NOT NULL DEFAULT 0,
+  reaction4  INTEGER NOT NULL DEFAULT 0,
+  reaction5  INTEGER NOT NULL DEFAULT 0,
+  reaction6  INTEGER NOT NULL DEFAULT 0,
+  reaction7  INTEGER NOT NULL DEFAULT 0,
+  reaction8  INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)`
   }
 ]
 
@@ -132,6 +178,8 @@ export const AUTH_COUNTERS_INDEX_DDL = `CREATE INDEX IF NOT EXISTS idx_{prefix}a
 
 /** 全部索引（表名/索引名都用 `{prefix}` 占位，切换前缀后拼装）。 */
 export const SCHEMA_INDEXES: string[] = [
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_{prefix}users_github_id
+  ON {prefix}users(github_id) WHERE github_id IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS idx_{prefix}passkeys_user
   ON {prefix}passkey_credentials(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_{prefix}sessions_user
@@ -142,7 +190,13 @@ export const SCHEMA_INDEXES: string[] = [
   ON {prefix}email_verification_codes(email, purpose, created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_{prefix}email_codes_expires
   ON {prefix}email_verification_codes(expires_at)`,
-  AUTH_COUNTERS_INDEX_DDL
+  AUTH_COUNTERS_INDEX_DDL,
+  `CREATE INDEX IF NOT EXISTS idx_{prefix}comment_url_status_created
+  ON {prefix}comment(url, status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_{prefix}comment_status_created
+  ON {prefix}comment(status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_{prefix}comment_rid
+  ON {prefix}comment(rid)`
 ]
 
 /** 基线迁移的完整语句序列（表 + 索引），交给执行器逐条执行。 */
