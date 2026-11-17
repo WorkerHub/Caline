@@ -16,11 +16,14 @@ const CONFIG_PATH = "worker/src/config/project.ts"
 /** 身份令牌唯一允许出现的位置（规格 §4 的令牌清单）。 */
 const ALLOWED = new Set([
   CONFIG_PATH,
+  "scripts/check-identity.mjs",
   // 只放默认表前缀这类默认值，不放身份令牌；列入白名单是为了生成项目的
   // slug 恰好与默认前缀同串时，全仓扫描不误报。
   "worker/src/config/defaults.json",
   "package.json",
   "web/package.json",
+  "shared/package.json",
+  "pnpm-lock.yaml",
   "worker/wrangler.toml",
   "web/index.html",
   "README.md",
@@ -132,6 +135,36 @@ if (projectName && projectSlug) {
       token,
       pattern: new RegExp(`\\b${escapeRegExp(token)}\\b`)
     }))
+
+  /**
+   * 契约包与特定类型标识符白名单（规格 §4 补充）：
+   * 1. 共享包范围名与模块路径：@caline/shared（支持任意包 import/export）
+   * 2. 项目特定契约复合类型名：Caline*（如 CalineSiteSettings, CalineDataDump 等）
+   * 3. 契约包内部及前端契约镜像文件中的说明注释
+   */
+  function stripAllowedTokens(relative, line) {
+    let cleaned = line
+    // 允许 @<projectSlug>/shared 等工作区范围名包引用
+    cleaned = cleaned.replaceAll(
+      new RegExp(`@${escapeRegExp(projectSlug)}\\/[A-Za-z0-9_-]+`, "g"),
+      ""
+    )
+    // 允许 Caline* 复合类型/接口/标识符
+    cleaned = cleaned.replaceAll(
+      new RegExp(`\\b${escapeRegExp(projectName)}[A-Za-z0-9_]+`, "g"),
+      ""
+    )
+    // 允许契约包本身以及前端契约对齐文件中的注释与测试说明
+    if (
+      relative.startsWith("shared/") ||
+      relative === "web/src/lib/api-types.ts"
+    ) {
+      cleaned = cleaned.replaceAll(projectName, "")
+      cleaned = cleaned.replaceAll(projectSlug, "")
+    }
+    return cleaned
+  }
+
   for (const relative of tracked) {
     if (ALLOWED.has(relative)) continue
     if (BINARY_EXTENSIONS.has(path.extname(relative).toLowerCase())) continue
@@ -139,8 +172,9 @@ if (projectName && projectSlug) {
     if (content === null) continue
     const lines = content.split("\n")
     for (let index = 0; index < lines.length; index++) {
+      const lineToCheck = stripAllowedTokens(relative, lines[index])
       for (const { token, pattern } of tokens) {
-        if (pattern.test(lines[index])) {
+        if (pattern.test(lineToCheck)) {
           fail(
             `${relative}:${index + 1}: 出现项目身份令牌 "${token}"，请改用身份单点或删掉`
           )

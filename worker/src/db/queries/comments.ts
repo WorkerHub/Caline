@@ -2,9 +2,10 @@
  * 评论核心业务表（<prefix>comment）的 SQL 读写（规格 §3）。
  * 表名一律经 `lib/tables.ts` 的 `commentTable(prefix)` 拼装。
  */
+import type { CommentStatus } from "@caline/shared"
 import { commentTable } from "../../lib/tables"
 
-export type CommentStatus = "approved" | "waiting" | "spam"
+export type { CommentStatus }
 
 export interface CommentRow {
   id: number

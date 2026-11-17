@@ -3,6 +3,15 @@
  *
  * 只放 wire 形状；页面自己的视图状态不进这里。所有时间为 ISO 字符串。
  */
+import type {
+  AdminUserItem,
+  AuthMe,
+  CalineSiteSettings,
+  CalineSiteSettingsPatch,
+  UserRole
+} from "@caline/shared"
+
+export * from "@caline/shared"
 
 export type AppMode = "multi" | "single"
 
@@ -42,43 +51,15 @@ export interface SetupOwnerInput {
   language: string
 }
 
-export type TwoFactorMethod = "totp" | "passkey" | "email"
-
-export type UserRole = "admin" | "user"
-
-export interface Me {
-  id: number
-  email: string
-  displayName: string
-  role: UserRole
-  status: "active" | "pending" | "disabled"
-  emailVerified: boolean
-  /** 首次登录强制改密（管理员建号等场景）；true 时前端引导强制改密后再放行。 */
-  mustChangePassword: boolean
-  language: string
-  timezone: string
-  totpEnabled: boolean
-  emailTwoFactorEnabled: boolean
-  passkeyCount: number
-  /** 个人资料修改锁（后端强制拦截的开关状态，前端据此灰掉编辑按钮）。 */
-  profileLocks: {
-    displayNameLocked: boolean
-  }
-}
-
-export type LoginResult =
-  | { success: true; user: Me }
-  | { requires2fa: true; tempToken: string; methods: TwoFactorMethod[] }
-
-export interface RegisterResult {
-  requiresApproval: boolean
-  requiresEmailVerification: boolean
-}
+export type Me = AuthMe
 
 export interface MeUpdateInput {
   displayName?: string
   language?: string
   timezone?: string
+  avatar?: string
+  url?: string
+  label?: string
 }
 
 export interface PasskeySummary {
@@ -128,6 +109,8 @@ export interface AdminSettings {
   setupPageEnabled: boolean
   tablePrefix: string
   email: EmailSettings
+  /** Caline 站点级核心设置（规格 §5、§6、§8） */
+  site?: CalineSiteSettings
 }
 
 export interface SmtpUpdateInput {
@@ -158,18 +141,12 @@ export interface AdminSettingsUpdate {
     smtp: SmtpUpdateInput
     resend: ResendUpdateInput
   }
+  /** Caline 站点级设置更新（规格 §5、§6、§8） */
+  site?: CalineSiteSettingsPatch
 }
 
 /** GET /api/admin/users 列表项：全量用户（`?status=pending` 时为其中待批准子集）。 */
-export interface AdminUser {
-  id: number
-  email: string
-  displayName: string
-  role: UserRole
-  status: "active" | "pending" | "disabled"
-  emailVerified: boolean
-  createdAt: string
-}
+export type AdminUser = AdminUserItem
 
 /** POST /api/admin/users：管理员手动新建用户（后端生成一次性初始密码）。 */
 export interface AdminCreateUserInput {
