@@ -212,7 +212,7 @@ export async function findApprovedHistory(
       )
       .bind(mail)
       .first<{ ok: number }>()
-    if (row) return true
+    return Boolean(row)
   }
 
   if (ip && ip.length > 0) {
@@ -222,7 +222,7 @@ export async function findApprovedHistory(
       )
       .bind(ip)
       .first<{ ok: number }>()
-    if (row) return true
+    return Boolean(row)
   }
 
   return false

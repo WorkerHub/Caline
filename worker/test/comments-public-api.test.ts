@@ -95,6 +95,99 @@ describe("Comments Public API", () => {
       error: { code: string }
     }
     expect(reservedNickBody.error.code).toBe("NICK_RESERVED")
+
+    // Regular user display name is NOT reserved for guests
+    const regularUser = await insertRegisteredUser(
+      db as unknown as D1Database,
+      prefix,
+      {
+        email: "regular@example.test",
+        passwordHash: await hashPassword("password123"),
+        language: "zh",
+        approvalRequired: false,
+        emailVerificationRequired: false
+      }
+    )
+    await db.db
+      .prepare(
+        `UPDATE ${prefix}users SET display_name = 'RegularGuy' WHERE id = ?`
+      )
+      .run(regularUser.id)
+
+    const regularNickRes = await request(env, "/api/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: "/posts/regular-nick",
+        content: "I have the same display name as a regular user",
+        nick: "RegularGuy",
+        mail: "other_guest@example.test"
+      })
+    })
+    expect(regularNickRes.status).toBe(201)
+  })
+
+  it("evaluates trust classification strictly by mail when mail is provided", async () => {
+    const { env, db } = await initializedContext()
+    const prefix = activePrefix(env)
+
+    // Turn off IP rate limit for this test so consecutive requests from same IP are evaluated for trust
+    const adminSession = await seedSession(db, prefix, { role: "admin" })
+    await request(env, "/api/admin/settings", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: adminSession.cookie
+      },
+      body: JSON.stringify({ site: { ipRateLimitSeconds: 0 } })
+    })
+
+    // Seed an approved comment from IP 192.168.2.50 (no email)
+
+    await db.db
+      .prepare(
+        `INSERT INTO ${prefix}comment
+          (url, nick, mail, content_raw, content_html, status, ip, created_at, updated_at)
+         VALUES ('/posts/trust', 'OldVisitor', '', 'Old', '<p>Old</p>', 'approved', '192.168.2.50', datetime('now'), datetime('now'))`
+      )
+      .run()
+
+    // Same IP posts without email -> approved because IP has approved history
+    const anonRes = await request(env, "/api/comments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "CF-Connecting-IP": "192.168.2.50"
+      },
+      body: JSON.stringify({
+        url: "/posts/trust",
+        content: "Anonymous comment from same IP",
+        nick: "Anon"
+      })
+    })
+    expect(anonRes.status).toBe(201)
+    const anonBody = (await anonRes.json()) as { data: CreateCommentResult }
+    expect(anonBody.data.status).toBe("approved")
+
+    // Same IP posts with a brand new email -> MUST NOT fall through to IP; must evaluate mail and be waiting
+    const newMailRes = await request(env, "/api/comments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "CF-Connecting-IP": "192.168.2.50"
+      },
+      body: JSON.stringify({
+        url: "/posts/trust",
+        content: "New email from same IP",
+        nick: "NewMailUser",
+        mail: "brand_new_visitor@example.test"
+      })
+    })
+    expect(newMailRes.status).toBe(201)
+    const newMailBody = (await newMailRes.json()) as {
+      data: CreateCommentResult
+    }
+    expect(newMailBody.data.status).toBe("waiting")
   })
 
   it("rejects duplicate content from the same visitor", async () => {

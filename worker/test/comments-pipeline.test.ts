@@ -46,6 +46,10 @@ describe("Comments Pipeline", () => {
       true
     )
     expect(isDomainAllowed("https://evil.com", safeDomains)).toBe(false)
+    expect(isDomainAllowed("https://evil-myblog.org", safeDomains)).toBe(false)
+    expect(
+      isDomainAllowed("https://myblog.org.attacker.com", safeDomains)
+    ).toBe(false)
     expect(isDomainAllowed(null, safeDomains)).toBe(false)
     expect(isDomainAllowed("https://anything.com", [])).toBe(true)
   })

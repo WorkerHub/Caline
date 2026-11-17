@@ -46,7 +46,26 @@ export async function renderAndSanitizeMarkdown(
   return String(result)
 }
 
-/** 安全域名比对（支持纯主机名或带协议前缀比对） */
+function extractHostnameAndOrigin(urlOrHost: string): {
+  hostname: string
+  origin: string | null
+} {
+  const trimmed = urlOrHost.trim().toLowerCase()
+  try {
+    const parsed = new URL(
+      trimmed.includes("://") ? trimmed : `https://${trimmed}`
+    )
+    return {
+      hostname: parsed.hostname.toLowerCase(),
+      origin: trimmed.includes("://") ? parsed.origin.toLowerCase() : null
+    }
+  } catch {
+    const hostOnly = trimmed.split("/")[0].split(":")[0].toLowerCase()
+    return { hostname: hostOnly, origin: null }
+  }
+}
+
+/** 安全域名比对（支持纯主机名或带协议前缀比对，仅允许完全匹配或合法子域名） */
 export function isDomainAllowed(
   headerVal: string | null | undefined,
   safeDomains: string[]
@@ -54,21 +73,31 @@ export function isDomainAllowed(
   if (!safeDomains || safeDomains.length === 0) return true
   if (!headerVal) return false
 
-  let candidate = headerVal.trim().toLowerCase()
-  try {
-    candidate = new URL(candidate).origin.toLowerCase()
-  } catch {
-    // 可能是主机名
-  }
+  const candidate = extractHostnameAndOrigin(headerVal)
+  if (!candidate.hostname) return false
 
   for (const domain of safeDomains) {
     const trimmed = domain.trim().toLowerCase()
     if (!trimmed) continue
-    try {
-      const allowedOrigin = new URL(trimmed).origin.toLowerCase()
-      if (candidate === allowedOrigin) return true
-    } catch {
-      if (candidate.includes(trimmed)) return true
+
+    const allowed = extractHostnameAndOrigin(trimmed)
+    if (!allowed.hostname) continue
+
+    // 双方均提供了协议来源且完全相等（例如 https://example.com）
+    if (
+      candidate.origin &&
+      allowed.origin &&
+      candidate.origin === allowed.origin
+    ) {
+      return true
+    }
+
+    // 主机名精确比对或合法子域名比对（如 sub.myblog.org 属于 myblog.org）
+    if (
+      candidate.hostname === allowed.hostname ||
+      candidate.hostname.endsWith(`.${allowed.hostname}`)
+    ) {
+      return true
     }
   }
   return false

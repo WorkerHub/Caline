@@ -372,6 +372,7 @@ commentsRoutes.post("/", async (c) => {
     // 访客防冒充：昵称命中保留词或管理员昵称 → 拒绝
     const adminUsers = await listUsers(c.env.DB, prefix)
     const adminNicks = adminUsers
+      .filter((u) => u.role === "admin")
       .map((u) => u.displayName || u.email.split("@")[0])
       .filter(Boolean)
     if (isNickReserved(nick, settings.reservedNicks, adminNicks)) {
