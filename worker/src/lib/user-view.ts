@@ -28,6 +28,10 @@ export interface UserView {
   profileLocks: {
     displayNameLocked: boolean
   }
+  label?: string
+  avatar?: string
+  url?: string
+  githubId?: string | null
 }
 
 export async function buildUserView(
@@ -50,6 +54,10 @@ export async function buildUserView(
     totpEnabled: Boolean(twoFactor?.totp_enabled),
     emailTwoFactorEnabled: Boolean(twoFactor?.email_2fa_enabled),
     passkeyCount,
-    profileLocks: await readProfileLockSettings(env)
+    profileLocks: await readProfileLockSettings(env),
+    label: user.label || undefined,
+    avatar: user.avatar || undefined,
+    url: user.url || undefined,
+    githubId: user.github_id ?? null
   }
 }

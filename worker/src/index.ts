@@ -12,7 +12,9 @@ import { getTablePrefix, isValidTablePrefix } from "./lib/table-prefix"
 import { authMiddleware } from "./middleware/auth"
 import { adminRoutes } from "./routes/admin"
 import { authRoutes } from "./routes/auth"
+import { commentsRoutes } from "./routes/comments"
 import { meRoutes } from "./routes/me"
+import { pagesRoutes } from "./routes/pages"
 import { twoFactorManageRoutes } from "./routes/twofa-manage"
 import { publicRoutes } from "./routes/public"
 import { setupRoutes } from "./routes/setup"
@@ -65,6 +67,8 @@ const PUBLIC_ROUTES = new Set([
 
 function isPublicRoute(method: string, path: string): boolean {
   if (path === "/api/setup" || path.startsWith("/api/setup/")) return true
+  if (path === "/api/comments" || path.startsWith("/api/comments/")) return true
+  if (path === "/api/pages" || path.startsWith("/api/pages/")) return true
   return PUBLIC_ROUTES.has(`${method} ${path}`)
 }
 
@@ -82,6 +86,8 @@ app.route("/api/public", publicRoutes)
 app.route("/api/auth", authRoutes)
 app.route("/api/auth/2fa", twoFactorManageRoutes)
 app.route("/api/me", meRoutes)
+app.route("/api/comments", commentsRoutes)
+app.route("/api/pages", pagesRoutes)
 app.route("/api/admin", adminRoutes)
 app.route("/api/setup", setupRoutes)
 app.route("/_waker", wakerRoutes)
