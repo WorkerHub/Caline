@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vitest"
 import {
+  buildAuthUiPath,
   normalizeLanguage,
   renderCodeEmail,
   renderTestEmail,
@@ -52,5 +53,25 @@ describe("邮件模板双语", () => {
     expect(normalizeLanguage("ja")).toBeNull()
     expect(normalizeLanguage(undefined)).toBeNull()
     expect(normalizeLanguage(42)).toBeNull()
+  })
+
+  it("buildAuthUiPath 生成规范的 /ui 前缀路径（规格 §8 修订）", () => {
+    expect(buildAuthUiPath("")).toBe("/ui")
+    expect(buildAuthUiPath("/")).toBe("/ui")
+    expect(buildAuthUiPath("/forgot-password")).toBe("/ui/forgot-password")
+    expect(buildAuthUiPath("forgot-password")).toBe("/ui/forgot-password")
+    expect(buildAuthUiPath("/login")).toBe("/ui/login")
+    expect(buildAuthUiPath("/setup")).toBe("/ui/setup")
+    expect(buildAuthUiPath("/register")).toBe("/ui/register")
+  })
+
+  it("邮件模板中若包含 URL 则必须带 /ui 前缀，严禁指向根路径", () => {
+    for (const purpose of PURPOSES) {
+      for (const lang of SUPPORTED_LANGUAGES) {
+        const content = renderCodeEmail(lang, purpose, "123456")
+        // 如果出现形如 href="/login"、href="/forgot-password" 等无 /ui 前缀的根路径链接则失败
+        expect(content.html).not.toMatch(/href="\/(?!ui)[^"]*"/)
+      }
+    }
   })
 })

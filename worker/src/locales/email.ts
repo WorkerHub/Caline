@@ -1,15 +1,31 @@
 /**
- * 邮件模板（规格 §5.6、§6.5）：中文 + 英文各一份，键一一对应。
+ * 邮件模板（规格 §5.6、§6.5、§8 修订）：中文 + 英文各一份，键一一对应。
  *
  * 只覆盖模板里会发的三类邮件：注册邮箱验证码、找回密码验证码、测试邮件。
  * 项目名取 `config/project.ts` 的 PROJECT_NAME（不写字面量，生成新项目后自动跟着变）。
  * 新增邮件类型必须同时补两种语言——`worker/test/email-locales.test.ts` 会核对语言集合。
+ *
+ * 规格 §8 冻结约束：服务端所有生成或引用的后台 SPA 链接（邮箱验证、重置密码等），
+ * 一律必须以 `/ui` 为前缀（统一使用 `buildAuthUiPath`），严禁无前缀直接指向根路径。
  */
 import { PROJECT_NAME } from "../config/project"
 
 export type EmailLanguage = "zh" | "en"
 
 export const SUPPORTED_LANGUAGES: EmailLanguage[] = ["zh", "en"]
+
+/**
+ * 生成指向后台 SPA 的链接路径（规格 §8 修订）：
+ * 后台 SPA 基座位于 /ui，服务端生成或引用的所有鉴权/后台页面路径必须统一带 `/ui` 前缀，
+ * 避免用户在邮件或外链中点击后误入根路径演示页或遭遇 404。
+ * 例如：buildAuthUiPath("/forgot-password") → "/ui/forgot-password"
+ */
+export function buildAuthUiPath(subpath = ""): string {
+  const normalized = subpath.trim()
+  if (!normalized || normalized === "/") return "/ui"
+  const clean = normalized.startsWith("/") ? normalized : `/${normalized}`
+  return `/ui${clean}`
+}
 
 /** 语言代码归一化：只接受支持集，其它一律 null（由调用方决定兜底）。 */
 export function normalizeLanguage(value: unknown): EmailLanguage | null {
