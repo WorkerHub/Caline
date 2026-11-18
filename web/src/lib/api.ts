@@ -28,6 +28,8 @@ import type {
   AdminUserActionResult,
   CalineDataDump,
   CommentAdminItem,
+  ListMeCommentsQuery,
+  ListMeCommentsResult,
   LoginResult,
   Me,
   MeUpdateInput,
@@ -308,7 +310,17 @@ export const meApi = {
     request<{ success: true }>(`/me/passkeys/${id}`, {
       method: "DELETE",
       body: { password }
-    })
+    }),
+
+  comments: (query?: ListMeCommentsQuery) => {
+    const params = new URLSearchParams()
+    if (query?.page) params.set("page", String(query.page))
+    if (query?.pageSize) params.set("pageSize", String(query.pageSize))
+    const qs = params.toString()
+    return request<ListMeCommentsResult>(
+      qs ? `/me/comments?${qs}` : "/me/comments"
+    )
+  }
 }
 
 /* 系统管理 */

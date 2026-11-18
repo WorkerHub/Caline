@@ -7,10 +7,12 @@ import {
   type CalineDataDump,
   type CalineSiteSettings,
   type CommentCountsResult,
+  type CommentMeItem,
   type CommentPublicItem,
   type CreateCommentInput,
   type CreateCommentResult,
   type ListCommentsResult,
+  type ListMeCommentsResult,
   type PageReactionResult,
   type PageViewResult,
   type RecentCommentItem,
@@ -251,5 +253,33 @@ describe("@caline/shared contracts", () => {
       ]
     }
     expect("password_hash" in dump.users[0]).toBe(false)
+  })
+
+  it("satisfies me comments result without exposing ip or ua", () => {
+    const item: CommentMeItem = {
+      id: 10,
+      url: "/posts/my-post",
+      contentRaw: "My private opinion",
+      contentHtml: "<p>My private opinion</p>",
+      status: "waiting",
+      likeCount: 0,
+      pid: null,
+      rid: null,
+      createdAt: "2026-11-18T01:00:00.000Z",
+      updatedAt: "2026-11-18T01:00:00.000Z"
+    }
+
+    const result: ListMeCommentsResult = {
+      items: [item],
+      total: 1,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1
+    }
+
+    expect(result.items[0].status).toBe("waiting")
+    expect("ip" in result.items[0]).toBe(false)
+    expect("ua" in result.items[0]).toBe(false)
+    expect("mail" in result.items[0]).toBe(false)
   })
 })
