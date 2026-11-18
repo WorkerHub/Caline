@@ -412,6 +412,31 @@ Reply to @alice and @bob
       expect(second).toBeNull()
     })
 
+    it("autoInit gates execution and returns null when no intent or configuration is declared", () => {
+      document.body.innerHTML = `
+        <div id="comments"></div>
+        <script src="https://caline.example.com/client/v1.js"></script>
+      `
+
+      const widget = autoInit()
+      expect(widget).toBeNull()
+      expect(
+        document.querySelector("#comments")?.classList.contains("cl-root")
+      ).toBe(false)
+      expect(document.querySelector("#caline")).toBeNull()
+    })
+
+    it("autoInit does not insert div container inside document.head", () => {
+      document.head.innerHTML = `
+        <script src="https://caline.example.com/client/v1.js" data-server-url="https://caline.example.com"></script>
+      `
+      document.body.innerHTML = "<div>No container</div>"
+
+      const widget = autoInit()
+      expect(widget).toBeNull()
+      expect(document.head.querySelector("div")).toBeNull()
+    })
+
     it("scheduleAutoInit waits for DOMContentLoaded if document.readyState is loading", () => {
       document.body.innerHTML = '<div id="caline"></div>'
       const addEventSpy = vi.spyOn(document, "addEventListener")

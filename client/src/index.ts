@@ -336,8 +336,34 @@ export function autoInit(): CalineWidget | null {
       }
     ).CALINE_CONFIG || {}
 
+  const hasGlobalConfig =
+    typeof globalConfig === "object" &&
+    globalConfig !== null &&
+    Object.keys(globalConfig).length > 0
+
   const script = findCurrentScript()
   const scriptDataset = script ? script.dataset : {}
+
+  const hasScriptIntent = Boolean(
+    script &&
+      (script.hasAttribute("data-caline") ||
+        script.hasAttribute("data-server-url") ||
+        script.hasAttribute("data-el") ||
+        script.hasAttribute("data-path") ||
+        script.hasAttribute("data-lang"))
+  )
+
+  const explicitCalineContainer = document.querySelector<HTMLElement>(
+    "[data-caline], #caline"
+  )
+
+  const hasIntent =
+    hasGlobalConfig || hasScriptIntent || Boolean(explicitCalineContainer)
+
+  // 严格门控：仅在检测到明确自动初始化意图时才允许执行，未满足条件直接返回 null
+  if (!hasIntent) {
+    return null
+  }
 
   let serverURL =
     globalConfig.serverURL ||
@@ -368,10 +394,11 @@ export function autoInit(): CalineWidget | null {
     }
   } else {
     el =
-      document.querySelector<HTMLElement>("#caline") ||
-      document.querySelector<HTMLElement>("#comments") ||
-      document.querySelector<HTMLElement>("#waline") ||
-      document.querySelector<HTMLElement>("[data-caline]")
+      explicitCalineContainer ||
+      (hasGlobalConfig || hasScriptIntent
+        ? document.querySelector<HTMLElement>("#comments") ||
+          document.querySelector<HTMLElement>("#waline")
+        : null)
   }
 
   if (!serverURL && el?.getAttribute("data-server-url")) {
@@ -388,8 +415,15 @@ export function autoInit(): CalineWidget | null {
     }
   }
 
-  // 若仍没有容器，但脚本在 DOM 中，自动在 script 后插入 #caline 容器
-  if (!el && script && script.parentNode) {
+  // 若仍没有容器，但脚本在 DOM 的 body 中（排除 head），自动在 script 后插入 #caline 容器
+  const isInsideHead = Boolean(
+    script &&
+      (script.closest?.("head") ||
+        (script.parentNode &&
+          script.parentNode.nodeName.toLowerCase() === "head"))
+  )
+
+  if (!el && script && script.parentNode && !isInsideHead) {
     const autoDiv = document.createElement("div")
     autoDiv.id = "caline"
     autoDiv.className = "caline-container"
