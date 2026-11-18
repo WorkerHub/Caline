@@ -30,4 +30,17 @@ describe("Caline Client Bundle", () => {
     )
     expect(publicContent.equals(distContent)).toBe(true)
   })
+
+  it("configures long cache headers for /client/* in web/public/_headers", () => {
+    const headersPath = path.resolve(
+      import.meta.dirname,
+      "../../web/public/_headers"
+    )
+    expect(fs.existsSync(headersPath)).toBe(true)
+
+    const headersContent = fs.readFileSync(headersPath, "utf8")
+    expect(headersContent).toContain("/client/*")
+    expect(headersContent).toMatch(/Cache-Control:.*max-age=\d+/)
+    expect(headersContent).toContain("Access-Control-Allow-Origin: *")
+  })
 })

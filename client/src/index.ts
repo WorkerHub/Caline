@@ -16,8 +16,8 @@ import { recentComments } from "./widgets/recent"
 import "./styles/theme.css"
 
 export interface CalineInitOptions {
-  el: string | HTMLElement
-  serverURL: string
+  el?: string | HTMLElement
+  serverURL?: string
   path?: string
   lang?: string
   pageSize?: number
@@ -44,15 +44,43 @@ export class CalineWidget {
   private loadMoreBtn!: HTMLButtonElement
 
   constructor(options: CalineInitOptions) {
-    const el =
-      typeof options.el === "string"
-        ? document.querySelector(options.el)
-        : options.el
+    let el = options.el
     if (!el) {
-      throw new Error(`Caline: container '${options.el}' not found`)
+      if (typeof document !== "undefined") {
+        el =
+          document.querySelector<HTMLElement>("#caline") ||
+          document.querySelector<HTMLElement>("#comments") ||
+          document.querySelector<HTMLElement>("#waline") ||
+          document.querySelector<HTMLElement>("[data-caline]") ||
+          undefined
+      }
+    } else if (typeof el === "string" && typeof document !== "undefined") {
+      el = document.querySelector<HTMLElement>(el) || undefined
+    }
+
+    if (!el) {
+      throw new Error(
+        `Caline: container '${options.el || "#caline"}' not found`
+      )
     }
     this.container = el as HTMLElement
-    this.serverUrl = options.serverURL.replace(/\/+$/, "")
+    this.container.dataset.calineInitialized = "true"
+
+    let serverUrl = options.serverURL
+    if (!serverUrl) {
+      if (typeof window !== "undefined" && window.location?.origin) {
+        serverUrl = window.location.origin
+      } else {
+        serverUrl = ""
+      }
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn(
+          "[Caline] serverURL is not specified, falling back to location.origin:",
+          serverUrl
+        )
+      }
+    }
+    this.serverUrl = (serverUrl || "").replace(/\/+$/, "")
     this.path =
       options.path ||
       (typeof window !== "undefined" ? window.location.pathname : "/")
@@ -272,22 +300,196 @@ export function init(options: CalineInitOptions): CalineWidget {
   return new CalineWidget(options)
 }
 
+function findCurrentScript(): HTMLScriptElement | null {
+  if (typeof document === "undefined") return null
+  if (
+    document.currentScript &&
+    document.currentScript instanceof HTMLScriptElement
+  ) {
+    return document.currentScript
+  }
+  const scripts = Array.from(
+    document.querySelectorAll<HTMLScriptElement>("script")
+  )
+  for (let i = scripts.length - 1; i >= 0; i--) {
+    const s = scripts[i]
+    if (
+      s.hasAttribute("data-server-url") ||
+      s.hasAttribute("data-caline") ||
+      (s.src && (s.src.includes("/client/v1.js") || s.src.includes("v1.js")))
+    ) {
+      return s
+    }
+  }
+  return null
+}
+
+export function autoInit(): CalineWidget | null {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return null
+  }
+
+  const globalConfig =
+    (
+      window as unknown as {
+        CALINE_CONFIG?: Partial<CalineInitOptions>
+      }
+    ).CALINE_CONFIG || {}
+
+  const script = findCurrentScript()
+  const scriptDataset = script ? script.dataset : {}
+
+  let serverURL =
+    globalConfig.serverURL ||
+    scriptDataset.serverUrl ||
+    script?.getAttribute("data-server-url") ||
+    ""
+
+  if (!serverURL && script?.src) {
+    try {
+      const parsed = new URL(script.src, window.location.href)
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        serverURL = parsed.origin
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  let el: HTMLElement | null = null
+  const targetSelector =
+    globalConfig.el || scriptDataset.el || script?.getAttribute("data-el")
+
+  if (targetSelector) {
+    if (typeof targetSelector === "string") {
+      el = document.querySelector<HTMLElement>(targetSelector)
+    } else if (targetSelector instanceof HTMLElement) {
+      el = targetSelector
+    }
+  } else {
+    el =
+      document.querySelector<HTMLElement>("#caline") ||
+      document.querySelector<HTMLElement>("#comments") ||
+      document.querySelector<HTMLElement>("#waline") ||
+      document.querySelector<HTMLElement>("[data-caline]")
+  }
+
+  if (!serverURL && el?.getAttribute("data-server-url")) {
+    serverURL = el.getAttribute("data-server-url") || ""
+  }
+
+  if (!serverURL) {
+    serverURL = window.location.origin || ""
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn(
+        "[Caline] serverURL is not specified, falling back to location.origin:",
+        serverURL
+      )
+    }
+  }
+
+  // 若仍没有容器，但脚本在 DOM 中，自动在 script 后插入 #caline 容器
+  if (!el && script && script.parentNode) {
+    const autoDiv = document.createElement("div")
+    autoDiv.id = "caline"
+    autoDiv.className = "caline-container"
+    script.parentNode.insertBefore(autoDiv, script.nextSibling)
+    el = autoDiv
+  }
+
+  if (!el) {
+    return null
+  }
+
+  if (el.dataset.calineInitialized === "true") {
+    return null
+  }
+
+  const path =
+    globalConfig.path ||
+    scriptDataset.path ||
+    script?.getAttribute("data-path") ||
+    el.getAttribute("data-path") ||
+    undefined
+
+  const lang =
+    globalConfig.lang ||
+    scriptDataset.lang ||
+    script?.getAttribute("data-lang") ||
+    el.getAttribute("data-lang") ||
+    undefined
+
+  const rawPageSize =
+    globalConfig.pageSize ||
+    scriptDataset.pageSize ||
+    script?.getAttribute("data-page-size") ||
+    el.getAttribute("data-page-size")
+  const pageSize = rawPageSize ? Number(rawPageSize) : undefined
+
+  const rawWordLimit =
+    globalConfig.wordLimit ||
+    scriptDataset.wordLimit ||
+    script?.getAttribute("data-word-limit") ||
+    el.getAttribute("data-word-limit")
+  const wordLimit = rawWordLimit ? Number(rawWordLimit) : undefined
+
+  const widget = init({
+    el,
+    serverURL,
+    path,
+    lang,
+    pageSize,
+    wordLimit
+  })
+
+  // 联动触发独立计数挂件自动填充
+  if (serverURL) {
+    if (document.querySelector("[data-caline-count]")) {
+      commentCount({ serverURL }).catch(() => {})
+    }
+    if (document.querySelector("[data-caline-pageview]")) {
+      pageview({ serverURL }).catch(() => {})
+    }
+  }
+
+  return widget
+}
+
+export function scheduleAutoInit(): void {
+  if (typeof document === "undefined") return
+
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => {
+        autoInit()
+      },
+      { once: true }
+    )
+  } else {
+    autoInit()
+  }
+}
+
 // 导出独立挂件与工具函数
 export { commentCount, pageview, reaction } from "./widgets/counters"
 export { recentComments } from "./widgets/recent"
 
 export const Caline = {
   init,
+  autoInit,
+  scheduleAutoInit,
   commentCount,
   pageview,
   reaction,
   recentComments
 }
 
-// 全局挂载支持 (支持 <script src="/client/v1.js"> 直接挂到 window.Caline)
+// 全局挂载支持与自动初始化 (支持 <script src="/client/v1.js"> 直接一行 script 运作)
 if (typeof window !== "undefined") {
   const g = window as unknown as Record<string, unknown>
   g.Caline = Caline
+  scheduleAutoInit()
 }
 
 export default Caline

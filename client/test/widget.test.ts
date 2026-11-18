@@ -14,6 +14,13 @@ import { CalineApiClient } from "../src/api/client"
 import { commentCount, pageview } from "../src/widgets/counters"
 import { renderCommentTree } from "../src/components/comment-tree"
 import { createEditor } from "../src/components/editor"
+import {
+  Caline,
+  init,
+  autoInit,
+  scheduleAutoInit,
+  type CalineInitOptions
+} from "../src/index"
 
 describe("Caline Client Widget", () => {
   beforeEach(() => {
@@ -286,6 +293,147 @@ Reply to @alice and @bob
       expect(loginLink).not.toBeNull()
       expect(loginLink?.getAttribute("href")).toBe("https://example.com/login")
       expect(loginLink?.textContent).toBe(t("login_prompt"))
+    })
+  })
+
+  describe("Auto-initialization and script embedding (§12 一行 script 即工作)", () => {
+    beforeEach(() => {
+      document.body.innerHTML = ""
+      delete (window as unknown as { CALINE_CONFIG?: unknown }).CALINE_CONFIG
+      window.fetch = vi.fn().mockResolvedValue({
+        json: async () => ({
+          data: {
+            items: [],
+            total: 0,
+            page: 1,
+            pageSize: 10,
+            totalPages: 0
+          }
+        })
+      }) as unknown as typeof fetch
+    })
+
+    it("Caline global exports all expected methods and autoInit hook", () => {
+      expect(typeof Caline.init).toBe("function")
+      expect(typeof Caline.autoInit).toBe("function")
+      expect(typeof Caline.scheduleAutoInit).toBe("function")
+      expect(typeof Caline.commentCount).toBe("function")
+      expect(typeof Caline.pageview).toBe("function")
+      expect(typeof Caline.reaction).toBe("function")
+      expect(typeof Caline.recentComments).toBe("function")
+      expect((window as unknown as { Caline: unknown }).Caline).toBe(Caline)
+    })
+
+    it("Caline.init gracefully falls back to location.origin when serverURL is omitted", () => {
+      document.body.innerHTML = '<div id="caline"></div>'
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+      const widget = init({ el: "#caline" } as CalineInitOptions)
+      expect(widget).toBeDefined()
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[Caline] serverURL is not specified"),
+        expect.any(String)
+      )
+      expect(
+        document.querySelector("#caline")?.classList.contains("cl-root")
+      ).toBe(true)
+    })
+
+    it("Caline.init auto-detects container #comments when el is omitted", () => {
+      document.body.innerHTML = '<div id="comments"></div>'
+      const widget = init({ serverURL: "https://example.com" })
+      expect(widget).toBeDefined()
+      expect(
+        document.querySelector("#comments")?.classList.contains("cl-root")
+      ).toBe(true)
+    })
+
+    it("autoInit reads data attributes from script tag and mounts to container", () => {
+      document.body.innerHTML = `
+        <div id="my-comments"></div>
+        <script src="https://caline.example.com/client/v1.js"
+          data-server-url="https://caline.example.com"
+          data-el="#my-comments"
+          data-path="/blog/p1"
+          data-lang="en"></script>
+      `
+
+      const widget = autoInit()
+      expect(widget).not.toBeNull()
+      const container = document.querySelector("#my-comments")
+      expect(container?.classList.contains("cl-root")).toBe(true)
+      expect(container?.getAttribute("data-caline-initialized")).toBe("true")
+      expect(container?.querySelector(".cl-btn-primary")?.textContent).toBe(
+        "Submit"
+      )
+    })
+
+    it("supports 'one line script works' by automatically creating #caline container", () => {
+      document.body.innerHTML = `
+        <main>
+          <h1>Blog Post</h1>
+          <script src="https://caline.example.com/client/v1.js" data-server-url="https://caline.example.com"></script>
+        </main>
+      `
+
+      const widget = autoInit()
+      expect(widget).not.toBeNull()
+      const generatedContainer = document.querySelector("#caline")
+      expect(generatedContainer).not.toBeNull()
+      expect(generatedContainer?.classList.contains("cl-root")).toBe(true)
+      expect(generatedContainer?.getAttribute("data-caline-initialized")).toBe(
+        "true"
+      )
+    })
+
+    it("autoInit reads global window.CALINE_CONFIG", () => {
+      ;(window as unknown as { CALINE_CONFIG: unknown }).CALINE_CONFIG = {
+        serverURL: "https://caline.example.com",
+        path: "/custom/path"
+      }
+      document.body.innerHTML = '<div id="caline"></div>'
+
+      const widget = autoInit()
+      expect(widget).not.toBeNull()
+      expect(
+        document.querySelector("#caline")?.classList.contains("cl-root")
+      ).toBe(true)
+    })
+
+    it("autoInit avoids duplicate initialization on already initialized containers", () => {
+      document.body.innerHTML = `
+        <div id="caline"></div>
+        <script src="https://caline.example.com/client/v1.js" data-server-url="https://caline.example.com"></script>
+      `
+
+      const first = autoInit()
+      expect(first).not.toBeNull()
+      const second = autoInit()
+      expect(second).toBeNull()
+    })
+
+    it("scheduleAutoInit waits for DOMContentLoaded if document.readyState is loading", () => {
+      document.body.innerHTML = '<div id="caline"></div>'
+      const addEventSpy = vi.spyOn(document, "addEventListener")
+
+      // 模拟 document.readyState === "loading"
+      Object.defineProperty(document, "readyState", {
+        value: "loading",
+        configurable: true
+      })
+
+      scheduleAutoInit()
+      expect(addEventSpy).toHaveBeenCalledWith(
+        "DOMContentLoaded",
+        expect.any(Function),
+        { once: true }
+      )
+
+      // 恢复 readyState
+      Object.defineProperty(document, "readyState", {
+        value: "complete",
+        configurable: true
+      })
     })
   })
 })
