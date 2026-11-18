@@ -305,9 +305,11 @@ describe("Admin Comments and System Management", () => {
       headers: { Cookie: adminSession.cookie }
     })
     const listBody = (await listRes.json()) as {
-      items: Array<{ id: number; label?: string; role: string }>
+      data: { items: Array<{ id: number; label?: string; role: string }> }
     }
-    const target = listBody.items.find((u) => u.id === targetSession.userId)
+    const target = listBody.data.items.find(
+      (u) => u.id === targetSession.userId
+    )
     expect(target?.label).toBe("协管员")
     expect(target?.role).toBe("admin")
 
@@ -358,9 +360,11 @@ describe("Admin Comments and System Management", () => {
       headers: { Cookie: adminSession.cookie }
     })
     expect(getRes.status).toBe(200)
-    const getBody = (await getRes.json()) as { site: CalineSiteSettings }
-    expect(getBody.site.auditSwitch).toBe(false)
-    expect(getBody.site.guestMode).toBe("open")
+    const getBody = (await getRes.json()) as {
+      data: { site: CalineSiteSettings }
+    }
+    expect(getBody.data.site.auditSwitch).toBe(false)
+    expect(getBody.data.site.guestMode).toBe("open")
 
     // Update settings
     const putRes = await request(env, "/api/admin/settings", {
@@ -380,11 +384,13 @@ describe("Admin Comments and System Management", () => {
       })
     })
     expect(putRes.status).toBe(200)
-    const putBody = (await putRes.json()) as { site: CalineSiteSettings }
-    expect(putBody.site.auditSwitch).toBe(true)
-    expect(putBody.site.guestMode).toBe("login_only")
-    expect(putBody.site.reservedNicks).toContain("Root")
-    expect(putBody.site.maxContentLength).toBe(500)
+    const putBody = (await putRes.json()) as {
+      data: { site: CalineSiteSettings }
+    }
+    expect(putBody.data.site.auditSwitch).toBe(true)
+    expect(putBody.data.site.guestMode).toBe("login_only")
+    expect(putBody.data.site.reservedNicks).toContain("Root")
+    expect(putBody.data.site.maxContentLength).toBe(500)
   })
 
   it("handles export and import with overwrite confirmation guard", async () => {

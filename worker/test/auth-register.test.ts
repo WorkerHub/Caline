@@ -83,9 +83,11 @@ describe("注册：首个用户与审核", () => {
     const pending = await request(env, "/api/admin/users?status=pending", {
       headers: { cookie: admin }
     })
-    const pendingBody = (await pending.json()) as {
-      items: Array<{ id: number; email: string }>
-    }
+    const pendingBody = (
+      (await pending.json()) as {
+        data: { items: Array<{ id: number; email: string }> }
+      }
+    ).data
     expect(pendingBody.items).toHaveLength(1)
     const memberId = pendingBody.items[0].id
 
@@ -132,9 +134,11 @@ describe("注册：首个用户与审核", () => {
     const admin = await adminCookie(env)
 
     await registerUser(env, { email: "spam@example.test" })
-    const list = (await (
-      await request(env, "/api/admin/users", { headers: { cookie: admin } })
-    ).json()) as { items: Array<{ id: number; email: string }> }
+    const list = (
+      (await (
+        await request(env, "/api/admin/users", { headers: { cookie: admin } })
+      ).json()) as { data: { items: Array<{ id: number; email: string }> } }
+    ).data
     const spam = list.items.find((item) => item.email === "spam@example.test")
     if (!spam) throw new Error("spam user missing from admin list")
     const id = spam.id

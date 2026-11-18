@@ -105,15 +105,17 @@ describe("用户管理操作列：重置密码", () => {
     )
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
-      id: number
-      email: string
-      temporaryPassword: string
+      data: {
+        id: number
+        email: string
+        temporaryPassword: string
+      }
     }
-    expect(body).toMatchObject({
+    expect(body.data).toMatchObject({
       id: target.userId,
       email: "victim@example.test"
     })
-    expect(body.temporaryPassword.length).toBeGreaterThanOrEqual(8)
+    expect(body.data.temporaryPassword.length).toBeGreaterThanOrEqual(8)
 
     // 库里只存哈希、置首登强制改密。
     const row = db.db
@@ -125,7 +127,7 @@ describe("用户管理操作列：重置密码", () => {
       password_hash: string
       must_change_password: number
     }
-    expect(row.password_hash).not.toContain(body.temporaryPassword)
+    expect(row.password_hash).not.toContain(body.data.temporaryPassword)
     expect(row.must_change_password).toBe(1)
 
     // 目标会话全部失效。
@@ -137,7 +139,7 @@ describe("用户管理操作列：重置密码", () => {
     // 一次性密码可登录（重置后新密码即为该临时密码）。
     const login = await postJson(env, "/api/auth/login", {
       email: "victim@example.test",
-      password: body.temporaryPassword
+      password: body.data.temporaryPassword
     })
     expect(login.status).toBe(200)
   })
@@ -161,7 +163,7 @@ describe("用户管理操作列：停用 / 启用", () => {
       { cookie: admin.cookie }
     )
     expect(disable.status).toBe(200)
-    expect(await disable.json()).toEqual({ success: true })
+    expect(await disable.json()).toEqual({ data: { success: true } })
 
     const disabled = db.db
       .prepare(`SELECT status FROM ${usersTable(prefix)} WHERE id = ?`)
@@ -299,7 +301,7 @@ describe("用户管理操作列：删除用户", () => {
       { cookie: admin.cookie }
     )
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ success: true })
+    expect(await res.json()).toEqual({ data: { success: true } })
 
     const usersLeft = db.db
       .prepare(`SELECT COUNT(*) AS n FROM ${usersTable(prefix)} WHERE id = ?`)
@@ -394,6 +396,6 @@ describe("用户管理操作列：护栏", () => {
       { cookie: admin.cookie }
     )
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ success: true })
+    expect(await res.json()).toEqual({ data: { success: true } })
   })
 })

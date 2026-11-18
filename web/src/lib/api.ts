@@ -66,7 +66,14 @@ export class ApiError extends Error {
 }
 
 interface ErrorEnvelope {
-  error?: string
+  error?:
+    | string
+    | {
+        code?: string
+        message?: string
+        retryAfter?: number
+        details?: unknown
+      }
   code?: string
   retryAfter?: number
   detail?: string
@@ -102,6 +109,29 @@ async function request<T>(
 
   if (!response.ok) {
     const envelope = (await response.json().catch(() => ({}))) as ErrorEnvelope
+    let code: string | undefined
+    let message: string | undefined
+    let retryAfter: number | undefined
+    let detail: string | undefined
+
+    if (envelope.error && typeof envelope.error === "object") {
+      const errObj = envelope.error as {
+        code?: string
+        message?: string
+        retryAfter?: number
+        details?: unknown
+      }
+      code = errObj.code
+      message = errObj.message
+      retryAfter = errObj.retryAfter
+      detail = typeof errObj.details === "string" ? errObj.details : undefined
+    } else {
+      code = envelope.code
+      message = typeof envelope.error === "string" ? envelope.error : undefined
+      retryAfter = envelope.retryAfter
+      detail = envelope.detail
+    }
+
     // 会话中途失效：清掉本地用户态，RequireAuth 会把人送回登录页。
     // 登录/找回等公开鉴权端点的 401 是业务结果，不动全局状态。
     if (response.status === 401 && !path.startsWith("/auth/")) {
@@ -111,17 +141,21 @@ async function request<T>(
     }
     throw new ApiError({
       status: response.status,
-      message: envelope.error ?? response.statusText,
-      code: envelope.code,
-      retryAfter: envelope.retryAfter,
-      detail: envelope.detail
+      message: message ?? response.statusText,
+      code,
+      retryAfter,
+      detail
     })
   }
 
   if (response.status === 204) return undefined as T
   const text = await response.text()
   if (!text) return undefined as T
-  return JSON.parse(text) as T
+  const json = JSON.parse(text)
+  if (json && typeof json === "object" && "data" in json) {
+    return json.data as T
+  }
+  return json as T
 }
 
 /* 公开数据 */

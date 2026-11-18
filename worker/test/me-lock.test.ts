@@ -116,14 +116,18 @@ describe("个人资料修改锁", () => {
       { cookie: admin }
     )
     expect(put.status).toBe(200)
-    expect(await put.json()).toMatchObject({
+    expect(
+      ((await put.json()) as { data: Record<string, unknown> }).data
+    ).toMatchObject({
       profileLocks: { displayNameLocked: true }
     })
 
     const got = await request(env, "/api/admin/settings", {
       headers: { cookie: admin }
     })
-    expect(await got.json()).toMatchObject({
+    expect(
+      ((await got.json()) as { data: Record<string, unknown> }).data
+    ).toMatchObject({
       profileLocks: { displayNameLocked: true }
     })
 
@@ -134,7 +138,9 @@ describe("个人资料修改锁", () => {
       { profileLocks: { displayNameLocked: false } },
       { cookie: admin }
     )
-    expect(await partial.json()).toMatchObject({
+    expect(
+      ((await partial.json()) as { data: Record<string, unknown> }).data
+    ).toMatchObject({
       profileLocks: { displayNameLocked: false }
     })
   })
@@ -151,9 +157,13 @@ describe("个人资料修改锁", () => {
       { cookie: admin }
     )
     expect(put.status).toBe(200)
-    const body = (await put.json()) as {
-      profileLocks: Record<string, unknown>
-    }
+    const body = (
+      (await put.json()) as {
+        data: {
+          profileLocks: Record<string, unknown>
+        }
+      }
+    ).data
     expect(body.profileLocks).not.toHaveProperty("usernameLocked")
     expect(
       db.db

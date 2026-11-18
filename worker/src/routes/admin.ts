@@ -97,7 +97,7 @@ adminRoutes.post("/setup", async (c) => {
 adminRoutes.get("/settings", async (c) => {
   const base = await buildAdminSettings(c.env)
   const site = await readCalineSettings(c.env)
-  return c.json({ ...base, site })
+  return calineSuccess(c, { ...base, site })
 })
 
 adminRoutes.put("/settings", async (c) => {
@@ -178,7 +178,7 @@ adminRoutes.put("/settings", async (c) => {
 
   const base = await buildAdminSettings(c.env)
   const site = await readCalineSettings(c.env)
-  return c.json({ ...base, site })
+  return calineSuccess(c, { ...base, site })
 })
 
 adminRoutes.post("/settings/test-email", async (c) => {
@@ -216,7 +216,7 @@ adminRoutes.post("/settings/test-email", async (c) => {
       detail: result.error ?? "unknown error"
     })
   }
-  return c.json({ success: true })
+  return calineSuccess(c, { success: true })
 })
 
 adminRoutes.get("/users", async (c) => {
@@ -231,7 +231,7 @@ adminRoutes.get("/users", async (c) => {
   }
   const prefix = getTablePrefix(c.env)
   const items = await listUsers(c.env.DB, prefix, status)
-  return c.json({ items, data: { items } })
+  return calineSuccess(c, { items })
 })
 
 adminRoutes.post("/users/:id/approve", async (c) => {
@@ -246,7 +246,7 @@ adminRoutes.post("/users/:id/approve", async (c) => {
     if (!user) return apiError(c, 404, "USER_NOT_FOUND", "User not found")
     return apiError(c, 409, "USER_NOT_PENDING", "User is not pending approval")
   }
-  return c.json({ success: true })
+  return calineSuccess(c, { success: true })
 })
 
 adminRoutes.post("/users/:id/reject", async (c) => {
@@ -261,7 +261,7 @@ adminRoutes.post("/users/:id/reject", async (c) => {
     if (!user) return apiError(c, 404, "USER_NOT_FOUND", "User not found")
     return apiError(c, 409, "USER_NOT_PENDING", "User is not pending approval")
   }
-  return c.json({ success: true })
+  return calineSuccess(c, { success: true })
 })
 
 adminRoutes.post("/users", async (c) => {
@@ -336,7 +336,7 @@ adminRoutes.post("/users", async (c) => {
     throw err
   }
 
-  return c.json({
+  return calineSuccess(c, {
     id: user.id,
     email: user.email,
     role: user.role,
@@ -364,7 +364,7 @@ adminRoutes.post("/users/:id/reset-password", async (c) => {
     must_change_password: 1
   })
   await revokeAllSessions(c.env.DB, prefix, id)
-  return c.json({
+  return calineSuccess(c, {
     id: user.id,
     email: user.email,
     temporaryPassword
@@ -390,7 +390,7 @@ adminRoutes.post("/users/:id/disable", async (c) => {
   if (!user) return apiError(c, 404, "USER_NOT_FOUND", "User not found")
 
   // 重复停用：幂等 200。
-  if (user.status === "disabled") return c.json({ success: true })
+  if (user.status === "disabled") return calineSuccess(c, { success: true })
 
   // 停用一个「能登录的管理员」时，若他是最后一个，拒绝。
   if (user.role === "admin" && user.status === "active") {
@@ -401,7 +401,7 @@ adminRoutes.post("/users/:id/disable", async (c) => {
 
   await updateUserFields(c.env.DB, prefix, id, { status: "disabled" })
   await revokeAllSessions(c.env.DB, prefix, id)
-  return c.json({ success: true })
+  return calineSuccess(c, { success: true })
 })
 
 adminRoutes.post("/users/:id/enable", async (c) => {
@@ -414,10 +414,10 @@ adminRoutes.post("/users/:id/enable", async (c) => {
   if (!user) return apiError(c, 404, "USER_NOT_FOUND", "User not found")
 
   // 重复启用：幂等 200。
-  if (user.status === "active") return c.json({ success: true })
+  if (user.status === "active") return calineSuccess(c, { success: true })
 
   await updateUserFields(c.env.DB, prefix, id, { status: "active" })
-  return c.json({ success: true })
+  return calineSuccess(c, { success: true })
 })
 
 adminRoutes.post("/users/:id/role", async (c) => {
@@ -437,7 +437,7 @@ adminRoutes.post("/users/:id/role", async (c) => {
   if (!user) return apiError(c, 404, "USER_NOT_FOUND", "User not found")
 
   // 角色未变化：幂等 200。
-  if (user.role === role) return c.json({ success: true })
+  if (user.role === role) return calineSuccess(c, { success: true })
 
   // 降级护栏：把「能登录的管理员」降成普通用户时，若他是最后一个，拒绝。
   if (user.role === "admin" && role === "user" && user.status === "active") {
@@ -447,7 +447,7 @@ adminRoutes.post("/users/:id/role", async (c) => {
   }
 
   await updateUserFields(c.env.DB, prefix, id, { role })
-  return c.json({ success: true })
+  return calineSuccess(c, { success: true })
 })
 
 adminRoutes.post("/users/:id/delete", async (c) => {
@@ -476,7 +476,7 @@ adminRoutes.post("/users/:id/delete", async (c) => {
   }
 
   await deleteUser(c.env.DB, prefix, id)
-  return c.json({ success: true })
+  return calineSuccess(c, { success: true })
 })
 
 adminRoutes.delete("/users/:id", async (c) => {
@@ -503,7 +503,7 @@ adminRoutes.delete("/users/:id", async (c) => {
   }
 
   await deleteUser(c.env.DB, prefix, id)
-  return c.json({ success: true })
+  return calineSuccess(c, { success: true })
 })
 
 adminRoutes.patch("/users/:id", async (c) => {

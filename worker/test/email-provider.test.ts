@@ -302,7 +302,7 @@ describe("管理面发送测试邮件", () => {
       { cookie }
     )
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ success: true })
+    expect(await res.json()).toEqual({ data: { success: true } })
     expect(stub.sent).toHaveLength(1)
   })
 
@@ -324,9 +324,13 @@ describe("管理面发送测试邮件", () => {
       { cookie }
     )
     expect(put.status).toBe(200)
-    const body = (await put.json()) as {
-      email: { configured: boolean; resend: { apiKeySet: boolean } }
-    }
+    const body = (
+      (await put.json()) as {
+        data: {
+          email: { configured: boolean; resend: { apiKeySet: boolean } }
+        }
+      }
+    ).data
     expect(body.email.configured).toBe(true)
     expect(body.email.resend.apiKeySet).toBe(true)
     expect(JSON.stringify(body)).not.toContain("re_live_key")
