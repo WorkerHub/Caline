@@ -128,8 +128,12 @@ export const routes: RouteObject[] = [
                             element: <ImportExportTab />
                           },
                           {
-                            path: "maintenance",
+                            path: "database",
                             element: <AdminMaintenanceTab />
+                          },
+                          {
+                            path: "maintenance",
+                            element: <Navigate to="/admin/database" replace />
                           },
                           {
                             path: "*",
