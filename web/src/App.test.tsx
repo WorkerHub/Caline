@@ -33,8 +33,14 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 const { publicApi, setupApi, meApi } = await import("@/lib/api")
 
-function renderAt(entries: RouteObject[] = routes, path = "/") {
-  const router = createMemoryRouter(entries, { initialEntries: [path] })
+function renderAt(entries: RouteObject[] = routes, path = "/ui") {
+  const initialEntry = path.startsWith("/ui")
+    ? path
+    : `/ui${path === "/" ? "" : path}`
+  const router = createMemoryRouter(entries, {
+    basename: "/ui",
+    initialEntries: [initialEntry]
+  })
   return render(
     <ThemeProvider>
       <RouterProvider router={router} />
@@ -63,31 +69,31 @@ beforeEach(() => {
 describe("路由与根门", () => {
   it("未初始化时打开任意页面都被引导到 setup", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(setupState())
-    renderAt(routes, "/")
+    renderAt(routes, "/ui")
 
     expect(await screen.findByLabelText("部署密钥")).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "初始化" })).toBeInTheDocument()
   })
 
-  it("已初始化时访客进入公开首页", async () => {
-    vi.mocked(setupApi.state).mockResolvedValue(
-      setupState({ ownerExists: true, enabled: false })
-    )
-    renderAt(routes, "/")
-
-    expect(
-      await screen.findByRole("link", { name: "登录" })
-    ).toBeInTheDocument()
-  })
-
-  it("旧 Waline 书签路径 /ui 重定向到 /", async () => {
+  it("已初始化时访客进入 /ui 基座自动引导到登录页", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(
       setupState({ ownerExists: true, enabled: false })
     )
     renderAt(routes, "/ui")
 
     expect(
-      await screen.findByRole("link", { name: "登录" })
+      await screen.findByRole("button", { name: "登录" })
+    ).toBeInTheDocument()
+  })
+
+  it("后台各子路由在 /ui 下正常可达", async () => {
+    vi.mocked(setupApi.state).mockResolvedValue(
+      setupState({ ownerExists: true, enabled: false })
+    )
+    renderAt(routes, "/ui/login")
+
+    expect(
+      await screen.findByRole("button", { name: "登录" })
     ).toBeInTheDocument()
   })
 
@@ -225,7 +231,7 @@ describe("路由与根门", () => {
     await screen.findByRole("heading", { name: "评论" })
 
     const brand = screen.getByRole("link", { name: PROJECT_NAME })
-    expect(brand.getAttribute("href")).toBe("/comments")
+    expect(brand.getAttribute("href")).toBe("/ui/comments")
     // 站点标是装饰性图形：带在链接里，但不进可访问名（名仍只是站名）。
     const mark = brand.querySelector("svg")
     expect(mark).not.toBeNull()
@@ -252,7 +258,7 @@ describe("路由与根门", () => {
 
     const dialog = await screen.findByRole("dialog")
     const brand = within(dialog).getByRole("link", { name: PROJECT_NAME })
-    expect(brand.getAttribute("href")).toBe("/comments")
+    expect(brand.getAttribute("href")).toBe("/ui/comments")
     expect(brand.querySelector("svg")).toHaveAttribute("aria-hidden", "true")
   })
 

@@ -4,10 +4,36 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: "ui-dev-fallback",
+      configureServer(server) {
+        server.middlewares.use((req, _res, next) => {
+          if (
+            req.url &&
+            (req.url === "/ui" || req.url.startsWith("/ui/")) &&
+            !req.url.includes(".")
+          ) {
+            req.url = "/ui/index.html"
+          }
+          next()
+        })
+      }
+    }
+  ],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src")
+    }
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(import.meta.dirname, "index.html"),
+        ui: path.resolve(import.meta.dirname, "ui/index.html")
+      }
     }
   },
   server: {
