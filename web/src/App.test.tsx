@@ -162,6 +162,28 @@ describe("路由与根门", () => {
     expect(screen.queryByTestId("workbench-page")).not.toBeInTheDocument()
   })
 
+  it("登录态顶栏不渲染语言切换按钮，未登录页顶栏保留", async () => {
+    vi.mocked(setupApi.state).mockResolvedValue(
+      setupState({ ownerExists: true, enabled: false })
+    )
+    vi.mocked(meApi.get).mockResolvedValue(me())
+
+    const view = renderAt(routes, "/comments")
+    await screen.findByRole("navigation")
+    expect(
+      screen.queryByRole("button", { name: /切换语言/i })
+    ).not.toBeInTheDocument()
+    view.unmount()
+
+    vi.mocked(meApi.get).mockRejectedValue(
+      new ApiError({ status: 401, message: "Unauthorized" })
+    )
+    renderAt(routes, "/login")
+    expect(
+      await screen.findByRole("button", { name: /切换语言/i })
+    ).toBeInTheDocument()
+  })
+
   it("管理员能在账号菜单里看到「系统管理」，普通成员看不到", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(
       setupState({ ownerExists: true, enabled: false })
@@ -360,6 +382,26 @@ describe("路由与根门", () => {
     ).toHaveAttribute("data-state", "active")
     expect(screen.getByRole("button", { name: "导出备份" })).toBeInTheDocument()
     view4.unmount()
+
+    // 直达 database tab
+    const view5 = renderAt(routes, "/admin/database")
+    expect(
+      await screen.findByRole("tab", { name: "数据库维护" })
+    ).toHaveAttribute("data-state", "active")
+    expect(
+      screen.getByRole("button", { name: "检查并升级数据库" })
+    ).toBeInTheDocument()
+    view5.unmount()
+
+    // 旧址 /admin/maintenance 重定向到 /admin/database
+    const view6 = renderAt(routes, "/admin/maintenance")
+    expect(
+      await screen.findByRole("tab", { name: "数据库维护" })
+    ).toHaveAttribute("data-state", "active")
+    expect(
+      screen.getByRole("button", { name: "检查并升级数据库" })
+    ).toBeInTheDocument()
+    view6.unmount()
   })
 
   it("设置页全 tab 路径化：裸路径重定向首 tab，各 tab 直达与刷新保持", async () => {
