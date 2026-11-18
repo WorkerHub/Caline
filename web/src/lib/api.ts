@@ -28,6 +28,9 @@ import type {
   AdminUserActionResult,
   CalineDataDump,
   CommentAdminItem,
+  DeleteCommentResult,
+  ListMeCommentsQuery,
+  ListMeCommentsResult,
   LoginResult,
   Me,
   MeUpdateInput,
@@ -38,7 +41,8 @@ import type {
   SetupOwnerInput,
   SetupResult,
   SetupState,
-  TwoFactorMethod
+  TwoFactorMethod,
+  UpdateCommentResult
 } from "@/lib/api-types"
 
 const BASE = "/api"
@@ -308,6 +312,31 @@ export const meApi = {
     request<{ success: true }>(`/me/passkeys/${id}`, {
       method: "DELETE",
       body: { password }
+    }),
+
+  comments: (query?: ListMeCommentsQuery) => {
+    const params = new URLSearchParams()
+    if (query?.page) params.set("page", String(query.page))
+    if (query?.pageSize) params.set("pageSize", String(query.pageSize))
+    const qs = params.toString()
+    return request<ListMeCommentsResult>(
+      qs ? `/me/comments?${qs}` : "/me/comments"
+    )
+  }
+}
+
+/* 评论操作（登录用户改删自己的评论） */
+
+export const commentsApi = {
+  update: (id: number, input: { content: string }) =>
+    request<UpdateCommentResult>(`/comments/${id}`, {
+      method: "PATCH",
+      body: input
+    }),
+
+  delete: (id: number) =>
+    request<DeleteCommentResult>(`/comments/${id}`, {
+      method: "DELETE"
     })
 }
 

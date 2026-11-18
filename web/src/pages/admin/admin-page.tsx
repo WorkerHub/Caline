@@ -1,24 +1,73 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
+import {
+  MemoryRouter,
+  Navigate,
+  Outlet,
+  useInRouterContext,
+  useLocation,
+  useOutlet,
+  useOutletContext
+} from "react-router"
 import { adminApi } from "@/lib/api"
 import { describeApiError } from "@/lib/api-errors"
 import type { AdminSettings } from "@/lib/api-types"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { RoutedTabs, type RoutedTabItem } from "@/components/routed-tabs"
 import { CreateUserSection } from "@/pages/admin/create-user-section"
 import { EmailSection } from "@/pages/admin/email-section"
 import { MaintenanceSection } from "@/pages/admin/maintenance-section"
 import { RegistrationSection } from "@/pages/admin/registration-section"
 import { UsersSection } from "@/pages/admin/users-section"
+import { SiteSettingsPage } from "@/pages/site-settings/site-settings-page"
+import { DataPage } from "@/pages/data/data-page"
 
-/**
- * 系统管理页（规格 §6.1，仅管理员）：邮件配置、注册/审核、用户列表、
- * setup 页开关与数据库维护。菜单隐藏只是体验，接口层 403 才是边界。
- */
-export function AdminPage() {
+export interface AdminOutletContext {
+  settings: AdminSettings
+  setSettings: (settings: AdminSettings) => void
+}
+
+export function AdminEmailTab() {
+  const context = useOutletContext<AdminOutletContext>()
+  return <EmailSection settings={context.settings} onSaved={context.setSettings} />
+}
+
+export function AdminRegistrationTab() {
+  const context = useOutletContext<AdminOutletContext>()
+  return (
+    <RegistrationSection
+      settings={context.settings}
+      onSaved={context.setSettings}
+    />
+  )
+}
+
+export function AdminUsersTab() {
+  return (
+    <div className="space-y-4">
+      <CreateUserSection />
+      <UsersSection />
+    </div>
+  )
+}
+
+export function AdminMaintenanceTab() {
+  const context = useOutletContext<AdminOutletContext>()
+  return (
+    <MaintenanceSection
+      settings={context.settings}
+      onSaved={context.setSettings}
+    />
+  )
+}
+
+export { SiteSettingsPage as CommentSettingsTab, DataPage as ImportExportTab }
+
+function AdminPageInner() {
   const { t } = useTranslation()
+  const location = useLocation()
+  const outlet = useOutlet()
   const [settings, setSettings] = useState<AdminSettings | null>(null)
   const [error, setError] = useState("")
-  const [tab, setTab] = useState("email")
 
   const load = useCallback(async () => {
     setError("")
@@ -33,8 +82,67 @@ export function AdminPage() {
     void load()
   }, [load])
 
+  const tabs: RoutedTabItem[] = [
+    { to: "/admin/email", label: t("admin.tabs.email") },
+    { to: "/admin/registration", label: t("admin.tabs.registration") },
+    { to: "/admin/users", label: t("admin.tabs.users") },
+    { to: "/admin/comment-settings", label: t("admin.tabs.commentSettings") },
+    { to: "/admin/import-export", label: t("admin.tabs.importExport") },
+    { to: "/admin/maintenance", label: t("admin.tabs.maintenance") }
+  ]
+
+  const isKnownTab =
+    location.pathname.startsWith("/admin/email") ||
+    location.pathname.startsWith("/admin/registration") ||
+    location.pathname.startsWith("/admin/users") ||
+    location.pathname.startsWith("/admin/comment-settings") ||
+    location.pathname.startsWith("/admin/import-export") ||
+    location.pathname.startsWith("/admin/maintenance")
+
+  if (
+    location.pathname === "/admin" ||
+    location.pathname === "/admin/" ||
+    !isKnownTab
+  ) {
+    return <Navigate to="/admin/email" replace />
+  }
+
+  const renderFallbackContent = (loadedSettings: AdminSettings) => {
+    if (location.pathname.startsWith("/admin/registration")) {
+      return (
+        <RegistrationSection
+          settings={loadedSettings}
+          onSaved={setSettings}
+        />
+      )
+    }
+    if (location.pathname.startsWith("/admin/users")) {
+      return (
+        <div className="space-y-4">
+          <CreateUserSection />
+          <UsersSection />
+        </div>
+      )
+    }
+    if (location.pathname.startsWith("/admin/comment-settings")) {
+      return <SiteSettingsPage />
+    }
+    if (location.pathname.startsWith("/admin/import-export")) {
+      return <DataPage />
+    }
+    if (location.pathname.startsWith("/admin/maintenance")) {
+      return (
+        <MaintenanceSection
+          settings={loadedSettings}
+          onSaved={setSettings}
+        />
+      )
+    }
+    return <EmailSection settings={loadedSettings} onSaved={setSettings} />
+  }
+
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-3xl space-y-4" data-testid="admin-page">
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -46,35 +154,35 @@ export function AdminPage() {
       ) : null}
 
       {settings ? (
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="email">{t("admin.tabs.email")}</TabsTrigger>
-            <TabsTrigger value="registration">
-              {t("admin.tabs.registration")}
-            </TabsTrigger>
-            <TabsTrigger value="users">{t("admin.tabs.users")}</TabsTrigger>
-            <TabsTrigger value="maintenance">
-              {t("admin.tabs.maintenance")}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="email" className="pt-4">
-            <EmailSection settings={settings} onSaved={setSettings} />
-          </TabsContent>
-          <TabsContent value="registration" className="pt-4">
-            <RegistrationSection settings={settings} onSaved={setSettings} />
-          </TabsContent>
-          <TabsContent value="users" className="pt-4">
-            <div className="space-y-4">
-              <CreateUserSection />
-              <UsersSection />
-            </div>
-          </TabsContent>
-          <TabsContent value="maintenance" className="pt-4">
-            <MaintenanceSection settings={settings} onSaved={setSettings} />
-          </TabsContent>
-        </Tabs>
+        <>
+          <RoutedTabs tabs={tabs} />
+          <div className="pt-4">
+            {outlet ? (
+              <Outlet context={{ settings, setSettings } satisfies AdminOutletContext} />
+            ) : (
+              renderFallbackContent(settings)
+            )}
+          </div>
+        </>
       ) : null}
     </div>
   )
+}
+
+/**
+ * 系统管理页（规格 §6.1，仅管理员）：
+ * 六 tab 路径段子路由（/admin/email、/admin/registration、/admin/users、
+ * /admin/comment-settings、/admin/import-export、/admin/maintenance）。
+ * 裸路径重定向首 tab，全站无状态切换式 tab 残留。
+ */
+export function AdminPage() {
+  const inRouter = useInRouterContext()
+  if (!inRouter) {
+    return (
+      <MemoryRouter initialEntries={["/admin/email"]}>
+        <AdminPageInner />
+      </MemoryRouter>
+    )
+  }
+  return <AdminPageInner />
 }

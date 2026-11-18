@@ -16,17 +16,29 @@ export const PAGE_TITLE_KEYS: Record<string, string> = {
   "/setup": "setup.title",
   "/workbench": "workbench.nav.workbench",
   "/comments": "comments.title",
+  "/my-comments": "myComments.title",
   "/site-settings": "siteSettings.title",
   "/data": "data.title",
   "/profile": "profile.title",
   "/settings": "settings.title",
+  "/settings/security": "settings.tabs.security",
+  "/settings/preferences": "settings.tabs.preferences",
   "/about": "workbench.nav.about",
-  "/admin": "workbench.nav.admin"
+  "/admin": "workbench.nav.admin",
+  "/admin/email": "admin.tabs.email",
+  "/admin/registration": "admin.tabs.registration",
+  "/admin/users": "admin.tabs.users",
+  "/admin/comment-settings": "admin.tabs.commentSettings",
+  "/admin/import-export": "admin.tabs.importExport",
+  "/admin/maintenance": "admin.tabs.maintenance"
 }
 
 /** 按当前路径取标题 key，未命中回落 errors.notFound。 */
 export function titleKeyFor(pathname: string): string {
-  return PAGE_TITLE_KEYS[pathname] ?? "errors.notFound"
+  if (PAGE_TITLE_KEYS[pathname]) return PAGE_TITLE_KEYS[pathname]
+  if (pathname.startsWith("/admin/")) return "workbench.nav.admin"
+  if (pathname.startsWith("/settings/")) return "workbench.nav.settings"
+  return "errors.notFound"
 }
 
 /**

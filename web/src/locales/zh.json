@@ -175,6 +175,7 @@
     "nav": {
       "workbench": "工作台",
       "comments": "评论",
+      "myComments": "我的评论",
       "siteSettings": "系统设置",
       "data": "数据",
       "settings": "设置",
@@ -268,6 +269,8 @@
       "email": "邮件配置",
       "registration": "注册与审核",
       "users": "用户管理",
+      "commentSettings": "评论设置",
+      "importExport": "导入导出",
       "maintenance": "数据库维护"
     },
     "email": {
@@ -487,6 +490,33 @@
       "confirmButton": "确认导入",
       "invalidJson": "备份文件格式无效",
       "success": "导入成功：已恢复 {{comments}} 条评论、{{counters}} 个计数器、{{users}} 个用户"
+    }
+  },
+  "myComments": {
+    "title": "我的评论",
+    "empty": "暂无评论",
+    "content": "评论内容",
+    "statusColumn": "状态",
+    "pageColumn": "所属页面",
+    "page": "第 {{page}} / {{totalPages}} 页",
+    "total": "共 {{total}} 条评论",
+    "prev": "上一页",
+    "next": "下一页",
+    "edit": "编辑",
+    "delete": "删除",
+    "editDialogTitle": "编辑评论",
+    "editDialogSubmit": "保存",
+    "deleteDialogTitle": "删除评论",
+    "deleteDialogDescription": "确定要删除这条评论吗？此操作无法撤销。",
+    "deleteDialogConfirm": "确认删除",
+    "cancel": "取消",
+    "updated": "评论已更新",
+    "deleted": "评论已删除",
+    "likeCount": "{{count}} 赞",
+    "status": {
+      "approved": "已通过",
+      "waiting": "待审核",
+      "spam": "垃圾"
     }
   }
 }

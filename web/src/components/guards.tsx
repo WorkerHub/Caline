@@ -94,23 +94,28 @@ export function RequirePasswordChanged() {
   return <Outlet />
 }
 
-/** 未登录页（登录/注册/找回密码/公开首页）：已登录就去默认页。 */
+/** 未登录页（登录/注册/找回密码/公开首页）：已登录就去角色默认落点。 */
 export function GuestOnly() {
   const user = useAuthStore((state) => state.user)
-  if (user) return <Navigate to="/comments" replace />
+  if (user) {
+    const destination = user.role === "admin" ? "/comments" : "/my-comments"
+    return <Navigate to={destination} replace />
+  }
   return <Outlet />
 }
 
-/** 管理员页面：菜单隐藏只是体验，接口 403 才是边界；这里拦的是直接拼 URL。 */
+/** 角色落点分流：管理员去 /comments，普通成员去 /my-comments。 */
+export function RoleLandingRedirect() {
+  const user = useAuthStore((state) => state.user)
+  const destination = user?.role === "admin" ? "/comments" : "/my-comments"
+  return <Navigate to={destination} replace />
+}
+
+/** 管理员页面：非管理员直达直接重定向回 /my-comments，不挂载页面、不发 admin 请求、不内联 403。 */
 export function RequireAdmin() {
-  const { t } = useTranslation()
   const user = useAuthStore((state) => state.user)
   if (user?.role !== "admin") {
-    return (
-      <div className="mx-auto max-w-md rounded-xl border bg-card p-6 text-sm text-muted-foreground">
-        {t("errors.codes.FORBIDDEN")}
-      </div>
-    )
+    return <Navigate to="/my-comments" replace />
   }
   return <Outlet />
 }
