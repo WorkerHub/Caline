@@ -112,11 +112,30 @@ app.get("/api/health", (c) => c.json({ status: "ok" }))
 // "接口不存在"当成 200 的 HTML 页面。
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404))
 
-// SPA 回落：静态资源命中就直接返回，未命中（客户端路由）返回 index.html。
-app.get("*", async (c) => {
+// 后台与鉴权 SPA 回落（规格 §8 修订）：/ui 与 /ui/* 静态资源命中直接返回；
+// 未命中（SPA 客户端路由如 /ui/login、/ui/setup、/ui/comments）回落至 /ui/index.html。
+app.get("/ui", async (c) => {
   const res = await c.env.ASSETS.fetch(c.req.raw)
   if (res.status !== 404) return res
-  return c.env.ASSETS.fetch(new Request(new URL("/", c.req.url), c.req.raw))
+  return c.env.ASSETS.fetch(
+    new Request(new URL("/ui/index.html", c.req.url), c.req.raw)
+  )
+})
+
+app.get("/ui/*", async (c) => {
+  const res = await c.env.ASSETS.fetch(c.req.raw)
+  if (res.status !== 404) return res
+  return c.env.ASSETS.fetch(
+    new Request(new URL("/ui/index.html", c.req.url), c.req.raw)
+  )
+})
+
+// 根路径演示页与其它静态资源（规格 §8 修订）：
+// - GET / 命中 dist/index.html（演示页）；
+// - 真实静态资源（如 /client/v1.js、/icons/*、/assets/*）直接返回；
+// - 删去原根路径统一回落，非 /ui 的未命中静态资源不再回落 SPA，如实 404。
+app.get("*", async (c) => {
+  return c.env.ASSETS.fetch(c.req.raw)
 })
 
 app.onError((err, c) => {

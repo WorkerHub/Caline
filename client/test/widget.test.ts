@@ -350,6 +350,30 @@ Reply to @alice and @bob
       ).toBe(true)
     })
 
+    it("Caline.init container fallback excludes <script data-caline> and throws if no valid container exists", () => {
+      document.body.innerHTML = `
+        <script data-caline src="https://caline.example.com/client/v1.js"></script>
+      `
+      expect(() => init({ serverURL: "https://example.com" })).toThrow(
+        "Caline: container '#caline' not found"
+      )
+      const scriptTag = document.querySelector("script")
+      expect(scriptTag?.classList.contains("cl-root")).toBe(false)
+    })
+
+    it("Caline.init container fallback matches <div data-caline> while ignoring <script data-caline>", () => {
+      document.body.innerHTML = `
+        <script data-caline src="https://caline.example.com/client/v1.js"></script>
+        <div data-caline id="real-container"></div>
+      `
+      const widget = init({ serverURL: "https://example.com" })
+      expect(widget).toBeDefined()
+      const realContainer = document.querySelector("#real-container")
+      expect(realContainer?.classList.contains("cl-root")).toBe(true)
+      const scriptTag = document.querySelector("script")
+      expect(scriptTag?.classList.contains("cl-root")).toBe(false)
+    })
+
     it("autoInit reads data attributes from script tag and mounts to container", () => {
       document.body.innerHTML = `
         <div id="my-comments"></div>
@@ -386,6 +410,103 @@ Reply to @alice and @bob
       expect(generatedContainer?.getAttribute("data-caline-initialized")).toBe(
         "true"
       )
+    })
+
+    it("autoInit handles <script data-caline> without explicit container by inserting #caline div without crashing", () => {
+      document.body.innerHTML = `
+        <main>
+          <h1>Article Title</h1>
+          <script src="https://caline.example.com/client/v1.js" data-caline></script>
+        </main>
+      `
+
+      const widget = autoInit()
+      expect(widget).not.toBeNull()
+      const scriptTag = document.querySelector("script")
+      expect(scriptTag?.classList.contains("cl-root")).toBe(false)
+      const insertedDiv = scriptTag?.nextElementSibling as HTMLElement
+      expect(insertedDiv).not.toBeNull()
+      expect(insertedDiv.id).toBe("caline")
+      expect(insertedDiv.classList.contains("cl-root")).toBe(true)
+      expect(insertedDiv.getAttribute("data-caline-initialized")).toBe("true")
+    })
+
+    it("autoInit handles <script data-caline data-server-url> without explicit container without crashing", () => {
+      document.body.innerHTML = `
+        <main>
+          <h1>Article Title</h1>
+          <script src="https://caline.example.com/client/v1.js" data-caline data-server-url="https://caline.example.com"></script>
+        </main>
+      `
+
+      const widget = autoInit()
+      expect(widget).not.toBeNull()
+      const scriptTag = document.querySelector("script")
+      expect(scriptTag?.classList.contains("cl-root")).toBe(false)
+      const insertedDiv = scriptTag?.nextElementSibling as HTMLElement
+      expect(insertedDiv).not.toBeNull()
+      expect(insertedDiv.id).toBe("caline")
+      expect(insertedDiv.classList.contains("cl-root")).toBe(true)
+      expect(insertedDiv.getAttribute("data-caline-initialized")).toBe("true")
+    })
+
+    it("autoInit preserves existing container <div data-caline> without regression", () => {
+      document.body.innerHTML = `
+        <div data-caline id="explicit-div"></div>
+        <script src="https://caline.example.com/client/v1.js" data-caline data-server-url="https://caline.example.com"></script>
+      `
+
+      const widget = autoInit()
+      expect(widget).not.toBeNull()
+      const scriptTag = document.querySelector("script")
+      expect(scriptTag?.classList.contains("cl-root")).toBe(false)
+      const targetDiv = document.querySelector("#explicit-div")
+      expect(targetDiv?.classList.contains("cl-root")).toBe(true)
+      expect(targetDiv?.getAttribute("data-caline-initialized")).toBe("true")
+      // Should not insert another #caline div
+      expect(document.querySelectorAll("#caline").length).toBe(0)
+    })
+
+    it("autoInit preserves existing container <div id='caline'> without regression", () => {
+      document.body.innerHTML = `
+        <div id="caline"></div>
+        <script src="https://caline.example.com/client/v1.js" data-caline data-server-url="https://caline.example.com"></script>
+      `
+
+      const widget = autoInit()
+      expect(widget).not.toBeNull()
+      const container = document.querySelector("#caline")
+      expect(container?.classList.contains("cl-root")).toBe(true)
+      expect(container?.getAttribute("data-caline-initialized")).toBe("true")
+      expect(document.querySelectorAll("#caline").length).toBe(1)
+    })
+
+    it("autoInit preserves existing container #comments without regression", () => {
+      document.body.innerHTML = `
+        <div id="comments"></div>
+        <script src="https://caline.example.com/client/v1.js" data-caline data-server-url="https://caline.example.com"></script>
+      `
+
+      const widget = autoInit()
+      expect(widget).not.toBeNull()
+      const container = document.querySelector("#comments")
+      expect(container?.classList.contains("cl-root")).toBe(true)
+      expect(container?.getAttribute("data-caline-initialized")).toBe("true")
+      expect(document.querySelector("#caline")).toBeNull()
+    })
+
+    it("autoInit preserves existing container #waline without regression", () => {
+      document.body.innerHTML = `
+        <div id="waline"></div>
+        <script src="https://caline.example.com/client/v1.js" data-caline data-server-url="https://caline.example.com"></script>
+      `
+
+      const widget = autoInit()
+      expect(widget).not.toBeNull()
+      const container = document.querySelector("#waline")
+      expect(container?.classList.contains("cl-root")).toBe(true)
+      expect(container?.getAttribute("data-caline-initialized")).toBe("true")
+      expect(document.querySelector("#caline")).toBeNull()
     })
 
     it("autoInit reads global window.CALINE_CONFIG", () => {
