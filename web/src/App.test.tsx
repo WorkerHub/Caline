@@ -13,7 +13,14 @@ import {
   SIDEBAR_OPEN_STORAGE_KEY,
   SIDEBAR_WIDTH_STORAGE_KEY
 } from "@/lib/sidebar"
-import { me, PROJECT_NAME, publicInfo, setupState } from "@/test/fixtures"
+import {
+  adminSettings,
+  calineSiteSettings,
+  me,
+  PROJECT_NAME,
+  publicInfo,
+  setupState
+} from "@/test/fixtures"
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>()
@@ -21,17 +28,23 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     publicApi: { get: vi.fn() },
     setupApi: { ...actual.setupApi, state: vi.fn() },
-    meApi: { ...actual.meApi, get: vi.fn(), update: vi.fn() },
+    meApi: {
+      ...actual.meApi,
+      get: vi.fn(),
+      update: vi.fn(),
+      comments: vi.fn()
+    },
     authApi: { ...actual.authApi, logout: vi.fn() },
     adminApi: {
       ...actual.adminApi,
       settings: vi.fn(),
-      users: vi.fn()
+      users: vi.fn(),
+      comments: vi.fn()
     }
   }
 })
 
-const { publicApi, setupApi, meApi } = await import("@/lib/api")
+const { publicApi, setupApi, meApi, adminApi } = await import("@/lib/api")
 
 function renderAt(entries: RouteObject[] = routes, path = "/ui") {
   const initialEntry = path.startsWith("/ui")
@@ -64,6 +77,22 @@ beforeEach(() => {
   vi.mocked(meApi.get).mockRejectedValue(
     new ApiError({ status: 401, message: "Unauthorized" })
   )
+  vi.mocked(meApi.comments).mockResolvedValue({
+    items: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+    totalPages: 1
+  })
+  vi.mocked(adminApi.comments).mockResolvedValue({
+    items: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+    totalPages: 1
+  })
+  vi.mocked(adminApi.settings).mockReset()
+  vi.mocked(adminApi.users).mockReset()
 })
 
 describe("路由与根门", () => {
@@ -157,23 +186,204 @@ describe("路由与根门", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("侧栏包含评论、系统设置、数据入口", async () => {
+  it("侧栏终局仅两项：管理员看到「评论」与「我的评论」，普通成员仅看到「我的评论」", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(
       setupState({ ownerExists: true, enabled: false })
     )
-    vi.mocked(meApi.get).mockResolvedValue(me())
+    vi.mocked(meApi.get).mockResolvedValue(me({ role: "admin" }))
 
-    renderAt(routes, "/comments")
-    const nav = await screen.findByRole("navigation")
+    const adminView = renderAt(routes, "/comments")
+    const adminNav = await screen.findByRole("navigation")
     expect(
-      within(nav)
+      within(adminNav)
         .getAllByRole("link")
         .map((link) => link.textContent)
-    ).toEqual(["评论", "系统设置", "数据"])
-    expect(within(nav).getByRole("link", { name: "评论" })).toHaveAttribute(
-      "data-active",
-      "true"
+    ).toEqual(["评论", "我的评论"])
+    expect(
+      within(adminNav).getByRole("link", { name: "评论" })
+    ).toHaveAttribute("data-active", "true")
+    adminView.unmount()
+
+    vi.mocked(meApi.get).mockResolvedValue(me({ role: "user" }))
+    renderAt(routes, "/my-comments")
+    const memberNav = await screen.findByRole("navigation")
+    expect(
+      within(memberNav)
+        .getAllByRole("link")
+        .map((link) => link.textContent)
+    ).toEqual(["我的评论"])
+    expect(
+      within(memberNav).queryByRole("link", { name: "评论" })
+    ).not.toBeInTheDocument()
+    expect(
+      within(memberNav).queryByRole("link", { name: "系统设置" })
+    ).not.toBeInTheDocument()
+    expect(
+      within(memberNav).queryByRole("link", { name: "数据" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("登录落点分流：管理员定向至 /comments，普通成员定向至 /my-comments", async () => {
+    vi.mocked(setupApi.state).mockResolvedValue(
+      setupState({ ownerExists: true, enabled: false })
     )
+
+    // 管理员进入 /workbench 分流至 /comments
+    vi.mocked(meApi.get).mockResolvedValue(me({ role: "admin" }))
+    const adminView = renderAt(routes, "/workbench")
+    expect(
+      await screen.findByRole("heading", { name: "评论" })
+    ).toBeInTheDocument()
+    adminView.unmount()
+
+    // 普通成员进入 /workbench 分流至 /my-comments
+    vi.mocked(meApi.get).mockResolvedValue(me({ role: "user" }))
+    const memberView = renderAt(routes, "/workbench")
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
+    memberView.unmount()
+
+    // 未登录页进入根路径 / 登录后分流
+    vi.mocked(meApi.get).mockResolvedValue(me({ role: "user" }))
+    renderAt(routes, "/")
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
+  })
+
+  it("管理员专属路由守卫：普通成员直达 /comments 或系统管理任一 tab 直接被重定向至 /my-comments，不挂载且不发 admin 请求", async () => {
+    vi.mocked(setupApi.state).mockResolvedValue(
+      setupState({ ownerExists: true, enabled: false })
+    )
+    vi.mocked(meApi.get).mockResolvedValue(me({ role: "user" }))
+
+    // 试图直达管理员评论页
+    const view1 = renderAt(routes, "/comments")
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: "评论" })
+    ).not.toBeInTheDocument()
+    expect(adminApi.comments).not.toHaveBeenCalled()
+    view1.unmount()
+
+    // 试图直达系统管理各 tab
+    const view2 = renderAt(routes, "/admin/email")
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
+    expect(adminApi.settings).not.toHaveBeenCalled()
+    view2.unmount()
+
+    const view3 = renderAt(routes, "/admin/users")
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
+    expect(adminApi.users).not.toHaveBeenCalled()
+    view3.unmount()
+
+    const view4 = renderAt(routes, "/admin")
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
+    expect(adminApi.settings).not.toHaveBeenCalled()
+    view4.unmount()
+  })
+
+  it("旧地址兼容重定向：/site-settings 与 /data 分别重定向至评论设置与导入导出 tab", async () => {
+    vi.mocked(setupApi.state).mockResolvedValue(
+      setupState({ ownerExists: true, enabled: false })
+    )
+    vi.mocked(meApi.get).mockResolvedValue(me({ role: "admin" }))
+    vi.mocked(adminApi.settings).mockResolvedValue(
+      adminSettings({
+        site: calineSiteSettings({
+          auditSwitch: false,
+          guestMode: "open"
+        })
+      })
+    )
+
+    const view1 = renderAt(routes, "/site-settings")
+    expect(await screen.findByText("全站评论审核")).toBeInTheDocument()
+    view1.unmount()
+
+    const view2 = renderAt(routes, "/data")
+    expect(
+      await screen.findByRole("button", { name: "导出备份" })
+    ).toBeInTheDocument()
+    view2.unmount()
+  })
+
+  it("系统管理六 tab 路径化：裸路径重定向首 tab，各 tab 直达与刷新保持", async () => {
+    vi.mocked(setupApi.state).mockResolvedValue(
+      setupState({ ownerExists: true, enabled: false })
+    )
+    vi.mocked(meApi.get).mockResolvedValue(me({ role: "admin" }))
+    vi.mocked(adminApi.settings).mockResolvedValue(
+      adminSettings({
+        site: calineSiteSettings({
+          auditSwitch: false,
+          guestMode: "open"
+        })
+      })
+    )
+
+    // 裸 /admin 重定向到首 tab /admin/email
+    const view1 = renderAt(routes, "/admin")
+    expect(
+      await screen.findByRole("tab", { name: "邮件配置" })
+    ).toHaveAttribute("data-state", "active")
+    view1.unmount()
+
+    // 直达 registration tab
+    const view2 = renderAt(routes, "/admin/registration")
+    expect(
+      await screen.findByRole("tab", { name: "注册与审核" })
+    ).toHaveAttribute("data-state", "active")
+    view2.unmount()
+
+    // 直达 comment-settings tab
+    const view3 = renderAt(routes, "/admin/comment-settings")
+    expect(
+      await screen.findByRole("tab", { name: "评论设置" })
+    ).toHaveAttribute("data-state", "active")
+    expect(await screen.findByText("全站评论审核")).toBeInTheDocument()
+    view3.unmount()
+
+    // 直达 import-export tab
+    const view4 = renderAt(routes, "/admin/import-export")
+    expect(
+      await screen.findByRole("tab", { name: "导入导出" })
+    ).toHaveAttribute("data-state", "active")
+    expect(screen.getByRole("button", { name: "导出备份" })).toBeInTheDocument()
+    view4.unmount()
+  })
+
+  it("设置页全 tab 路径化：裸路径重定向首 tab，各 tab 直达与刷新保持", async () => {
+    vi.mocked(setupApi.state).mockResolvedValue(
+      setupState({ ownerExists: true, enabled: false })
+    )
+    vi.mocked(meApi.get).mockResolvedValue(me({ role: "user" }))
+
+    // 裸 /settings 重定向到 /settings/security
+    const view1 = renderAt(routes, "/settings")
+    expect(await screen.findByRole("tab", { name: "安全" })).toHaveAttribute(
+      "data-state",
+      "active"
+    )
+    view1.unmount()
+
+    // 直达 preferences tab
+    const view2 = renderAt(routes, "/settings/preferences")
+    expect(await screen.findByRole("tab", { name: "偏好" })).toHaveAttribute(
+      "data-state",
+      "active"
+    )
+    expect(screen.getByText("时区")).toBeInTheDocument()
+    view2.unmount()
   })
 
   it("账号菜单里的个人资料跳到独立页", async () => {

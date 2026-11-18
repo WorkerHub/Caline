@@ -1,14 +1,13 @@
 import {
-  DatabaseIcon,
   InfoIcon,
   LogOutIcon,
   MenuIcon,
   MessageSquareIcon,
+  MessageSquareTextIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   SettingsIcon,
   ShieldCheckIcon,
-  SlidersHorizontalIcon,
   UserIcon
 } from "lucide-react"
 import {
@@ -73,17 +72,13 @@ const SIDEBAR_ITEMS = [
   {
     to: "/comments",
     labelKey: "workbench.nav.comments",
-    icon: MessageSquareIcon
+    icon: MessageSquareIcon,
+    adminOnly: true
   },
   {
-    to: "/site-settings",
-    labelKey: "workbench.nav.siteSettings",
-    icon: SlidersHorizontalIcon
-  },
-  {
-    to: "/data",
-    labelKey: "workbench.nav.data",
-    icon: DatabaseIcon
+    to: "/my-comments",
+    labelKey: "workbench.nav.myComments",
+    icon: MessageSquareTextIcon
   }
 ] as const
 
@@ -107,12 +102,21 @@ function isActivePath(pathname: string, to: string) {
   return pathname === to || pathname.startsWith(`${to}/`)
 }
 
-function Navigation({ onNavigate }: { onNavigate?: () => void }) {
+function Navigation({
+  role,
+  onNavigate
+}: {
+  role?: string
+  onNavigate?: () => void
+}) {
   const { t } = useTranslation()
+  const items = SIDEBAR_ITEMS.filter(
+    (item) => !("adminOnly" in item) || role === "admin"
+  )
 
   return (
     <nav className="flex flex-col gap-1 p-2">
-      {SIDEBAR_ITEMS.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon
         return (
           <NavLink
@@ -169,6 +173,8 @@ export function AppShell() {
   const toggleLabelKey = sidebarOpen
     ? "workbench.sidebar.collapse"
     : "workbench.sidebar.expand"
+
+  const homePath = role === "admin" ? "/comments" : "/my-comments"
 
   const signOut = async () => {
     await logout()
@@ -244,7 +250,7 @@ export function AppShell() {
       <Sidebar collapsible="icon">
         <SidebarHeader className="p-0">
           <NavLink
-            to="/comments"
+            to={homePath}
             className="flex h-14 items-center gap-2 px-4 font-heading text-sm font-semibold tracking-tight transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
           >
             <SiteLogo />
@@ -257,7 +263,9 @@ export function AppShell() {
         <SidebarContent>
           <nav className="p-2">
             <SidebarMenu>
-              {SIDEBAR_ITEMS.map((item) => {
+              {SIDEBAR_ITEMS.filter(
+                (item) => !("adminOnly" in item) || role === "admin"
+              ).map((item) => {
                 const Icon = item.icon
                 return (
                   <SidebarMenuItem key={item.to}>
@@ -331,7 +339,7 @@ export function AppShell() {
               <SheetHeader className="border-b px-4 py-3">
                 <SheetTitle className="text-sm font-semibold">
                   <NavLink
-                    to="/comments"
+                    to={homePath}
                     onClick={() => setMobileOpen(false)}
                     className="inline-flex items-center gap-2"
                   >
@@ -340,7 +348,7 @@ export function AppShell() {
                   </NavLink>
                 </SheetTitle>
               </SheetHeader>
-              <Navigation onNavigate={() => setMobileOpen(false)} />
+              <Navigation role={role} onNavigate={() => setMobileOpen(false)} />
             </SheetContent>
           </Sheet>
 
