@@ -111,7 +111,6 @@ export function createEditor(props: EditorProps): HTMLElement {
     })
     emojiPanel.appendChild(btn)
   }
-  container.appendChild(emojiPanel)
 
   // 5. 底部工具条
   const footer = document.createElement("div")
@@ -230,6 +229,7 @@ export function createEditor(props: EditorProps): HTMLElement {
   footer.appendChild(tools)
   footer.appendChild(submitBtn)
   container.appendChild(footer)
+  container.appendChild(emojiPanel)
 
   return container
 }
