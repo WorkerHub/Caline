@@ -28,7 +28,9 @@ export interface AdminOutletContext {
 
 export function AdminEmailTab() {
   const context = useOutletContext<AdminOutletContext>()
-  return <EmailSection settings={context.settings} onSaved={context.setSettings} />
+  return (
+    <EmailSection settings={context.settings} onSaved={context.setSettings} />
+  )
 }
 
 export function AdminRegistrationTab() {
@@ -110,10 +112,7 @@ function AdminPageInner() {
   const renderFallbackContent = (loadedSettings: AdminSettings) => {
     if (location.pathname.startsWith("/admin/registration")) {
       return (
-        <RegistrationSection
-          settings={loadedSettings}
-          onSaved={setSettings}
-        />
+        <RegistrationSection settings={loadedSettings} onSaved={setSettings} />
       )
     }
     if (location.pathname.startsWith("/admin/users")) {
@@ -132,10 +131,7 @@ function AdminPageInner() {
     }
     if (location.pathname.startsWith("/admin/maintenance")) {
       return (
-        <MaintenanceSection
-          settings={loadedSettings}
-          onSaved={setSettings}
-        />
+        <MaintenanceSection settings={loadedSettings} onSaved={setSettings} />
       )
     }
     return <EmailSection settings={loadedSettings} onSaved={setSettings} />
@@ -158,7 +154,9 @@ function AdminPageInner() {
           <RoutedTabs tabs={tabs} />
           <div className="pt-4">
             {outlet ? (
-              <Outlet context={{ settings, setSettings } satisfies AdminOutletContext} />
+              <Outlet
+                context={{ settings, setSettings } satisfies AdminOutletContext}
+              />
             ) : (
               renderFallbackContent(settings)
             )}

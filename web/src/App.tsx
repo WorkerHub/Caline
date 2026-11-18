@@ -80,7 +80,10 @@ export const routes: RouteObject[] = [
                     path: "/settings",
                     element: <SettingsPage />,
                     children: [
-                      { index: true, element: <Navigate to="security" replace /> },
+                      {
+                        index: true,
+                        element: <Navigate to="security" replace />
+                      },
                       { path: "security", element: <SecuritySection /> },
                       { path: "preferences", element: <PreferencesSection /> },
                       { path: "*", element: <Navigate to="security" replace /> }
@@ -106,7 +109,10 @@ export const routes: RouteObject[] = [
                         path: "/admin",
                         element: <AdminPage />,
                         children: [
-                          { index: true, element: <Navigate to="email" replace /> },
+                          {
+                            index: true,
+                            element: <Navigate to="email" replace />
+                          },
                           { path: "email", element: <AdminEmailTab /> },
                           {
                             path: "registration",
@@ -125,7 +131,10 @@ export const routes: RouteObject[] = [
                             path: "maintenance",
                             element: <AdminMaintenanceTab />
                           },
-                          { path: "*", element: <Navigate to="email" replace /> }
+                          {
+                            path: "*",
+                            element: <Navigate to="email" replace />
+                          }
                         ]
                       }
                     ]

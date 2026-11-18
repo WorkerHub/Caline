@@ -199,10 +199,9 @@ describe("路由与根门", () => {
         .getAllByRole("link")
         .map((link) => link.textContent)
     ).toEqual(["评论", "我的评论"])
-    expect(within(adminNav).getByRole("link", { name: "评论" })).toHaveAttribute(
-      "data-active",
-      "true"
-    )
+    expect(
+      within(adminNav).getByRole("link", { name: "评论" })
+    ).toHaveAttribute("data-active", "true")
     adminView.unmount()
 
     vi.mocked(meApi.get).mockResolvedValue(me({ role: "user" }))
@@ -213,9 +212,15 @@ describe("路由与根门", () => {
         .getAllByRole("link")
         .map((link) => link.textContent)
     ).toEqual(["我的评论"])
-    expect(within(memberNav).queryByRole("link", { name: "评论" })).not.toBeInTheDocument()
-    expect(within(memberNav).queryByRole("link", { name: "系统设置" })).not.toBeInTheDocument()
-    expect(within(memberNav).queryByRole("link", { name: "数据" })).not.toBeInTheDocument()
+    expect(
+      within(memberNav).queryByRole("link", { name: "评论" })
+    ).not.toBeInTheDocument()
+    expect(
+      within(memberNav).queryByRole("link", { name: "系统设置" })
+    ).not.toBeInTheDocument()
+    expect(
+      within(memberNav).queryByRole("link", { name: "数据" })
+    ).not.toBeInTheDocument()
   })
 
   it("登录落点分流：管理员定向至 /comments，普通成员定向至 /my-comments", async () => {
@@ -226,19 +231,25 @@ describe("路由与根门", () => {
     // 管理员进入 /workbench 分流至 /comments
     vi.mocked(meApi.get).mockResolvedValue(me({ role: "admin" }))
     const adminView = renderAt(routes, "/workbench")
-    expect(await screen.findByRole("heading", { name: "评论" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "评论" })
+    ).toBeInTheDocument()
     adminView.unmount()
 
     // 普通成员进入 /workbench 分流至 /my-comments
     vi.mocked(meApi.get).mockResolvedValue(me({ role: "user" }))
     const memberView = renderAt(routes, "/workbench")
-    expect(await screen.findByRole("heading", { name: "我的评论" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
     memberView.unmount()
 
     // 未登录页进入根路径 / 登录后分流
     vi.mocked(meApi.get).mockResolvedValue(me({ role: "user" }))
     renderAt(routes, "/")
-    expect(await screen.findByRole("heading", { name: "我的评论" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
   })
 
   it("管理员专属路由守卫：普通成员直达 /comments 或系统管理任一 tab 直接被重定向至 /my-comments，不挂载且不发 admin 请求", async () => {
@@ -249,24 +260,34 @@ describe("路由与根门", () => {
 
     // 试图直达管理员评论页
     const view1 = renderAt(routes, "/comments")
-    expect(await screen.findByRole("heading", { name: "我的评论" })).toBeInTheDocument()
-    expect(screen.queryByRole("heading", { name: "评论" })).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: "评论" })
+    ).not.toBeInTheDocument()
     expect(adminApi.comments).not.toHaveBeenCalled()
     view1.unmount()
 
     // 试图直达系统管理各 tab
     const view2 = renderAt(routes, "/admin/email")
-    expect(await screen.findByRole("heading", { name: "我的评论" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
     expect(adminApi.settings).not.toHaveBeenCalled()
     view2.unmount()
 
     const view3 = renderAt(routes, "/admin/users")
-    expect(await screen.findByRole("heading", { name: "我的评论" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
     expect(adminApi.users).not.toHaveBeenCalled()
     view3.unmount()
 
     const view4 = renderAt(routes, "/admin")
-    expect(await screen.findByRole("heading", { name: "我的评论" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "我的评论" })
+    ).toBeInTheDocument()
     expect(adminApi.settings).not.toHaveBeenCalled()
     view4.unmount()
   })
@@ -290,7 +311,9 @@ describe("路由与根门", () => {
     view1.unmount()
 
     const view2 = renderAt(routes, "/data")
-    expect(await screen.findByRole("button", { name: "导出备份" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("button", { name: "导出备份" })
+    ).toBeInTheDocument()
     view2.unmount()
   })
 
@@ -310,35 +333,31 @@ describe("路由与根门", () => {
 
     // 裸 /admin 重定向到首 tab /admin/email
     const view1 = renderAt(routes, "/admin")
-    expect(await screen.findByRole("tab", { name: "邮件配置" })).toHaveAttribute(
-      "data-state",
-      "active"
-    )
+    expect(
+      await screen.findByRole("tab", { name: "邮件配置" })
+    ).toHaveAttribute("data-state", "active")
     view1.unmount()
 
     // 直达 registration tab
     const view2 = renderAt(routes, "/admin/registration")
-    expect(await screen.findByRole("tab", { name: "注册与审核" })).toHaveAttribute(
-      "data-state",
-      "active"
-    )
+    expect(
+      await screen.findByRole("tab", { name: "注册与审核" })
+    ).toHaveAttribute("data-state", "active")
     view2.unmount()
 
     // 直达 comment-settings tab
     const view3 = renderAt(routes, "/admin/comment-settings")
-    expect(await screen.findByRole("tab", { name: "评论设置" })).toHaveAttribute(
-      "data-state",
-      "active"
-    )
+    expect(
+      await screen.findByRole("tab", { name: "评论设置" })
+    ).toHaveAttribute("data-state", "active")
     expect(await screen.findByText("全站评论审核")).toBeInTheDocument()
     view3.unmount()
 
     // 直达 import-export tab
     const view4 = renderAt(routes, "/admin/import-export")
-    expect(await screen.findByRole("tab", { name: "导入导出" })).toHaveAttribute(
-      "data-state",
-      "active"
-    )
+    expect(
+      await screen.findByRole("tab", { name: "导入导出" })
+    ).toHaveAttribute("data-state", "active")
     expect(screen.getByRole("button", { name: "导出备份" })).toBeInTheDocument()
     view4.unmount()
   })

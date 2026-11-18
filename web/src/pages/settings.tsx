@@ -37,7 +37,8 @@ function SettingsPageInner() {
       <RoutedTabs tabs={tabs} />
 
       <div className="pt-4">
-        {outlet ?? (isPreferences ? <PreferencesSection /> : <SecuritySection />)}
+        {outlet ??
+          (isPreferences ? <PreferencesSection /> : <SecuritySection />)}
       </div>
     </div>
   )

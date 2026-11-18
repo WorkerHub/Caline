@@ -2,7 +2,6 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { ApiError } from "@/lib/api"
 import { MyCommentsPage } from "@/pages/my-comments/my-comments-page"
 import { useAuthStore } from "@/stores/auth"
 import { me } from "@/test/fixtures"
@@ -60,7 +59,11 @@ describe("我的评论页", () => {
   it("默认渲染本人评论列表，展示状态徽标、正文、URL、时间，严格脱敏不含 IP/UA", async () => {
     vi.mocked(meApi.comments).mockResolvedValue({
       items: [
-        sampleComment({ id: 1, status: "approved", contentRaw: "审核通过的评论" }),
+        sampleComment({
+          id: 1,
+          status: "approved",
+          contentRaw: "审核通过的评论"
+        }),
         sampleComment({ id: 2, status: "waiting", contentRaw: "待审核的评论" }),
         sampleComment({ id: 3, status: "spam", contentRaw: "标记垃圾的评论" })
       ],
@@ -85,7 +88,9 @@ describe("我的评论页", () => {
     expect(screen.getAllByText("/posts/first-post").length).toBeGreaterThan(0)
 
     // 严格脱敏：绝不渲染 IP 与 UA
-    expect(screen.queryByText(/127\.0\.0\.1|192\.168\.|Mozilla|Chrome|Safari/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/127\.0\.0\.1|192\.168\.|Mozilla|Chrome|Safari/i)
+    ).not.toBeInTheDocument()
   })
 
   it("无评论时渲染正常空状态", async () => {
@@ -155,7 +160,9 @@ describe("我的评论页", () => {
     const editBtn = screen.getByRole("button", { name: "编辑" })
     await user.click(editBtn)
 
-    expect(await screen.findByRole("heading", { name: "编辑评论" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "编辑评论" })
+    ).toBeInTheDocument()
     const textarea = screen.getByLabelText("评论内容")
     expect(textarea).toHaveValue("原有内容")
 
@@ -194,7 +201,9 @@ describe("我的评论页", () => {
     const deleteBtn = screen.getByRole("button", { name: "删除" })
     await user.click(deleteBtn)
 
-    expect(await screen.findByRole("heading", { name: "删除评论" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "删除评论" })
+    ).toBeInTheDocument()
     expect(
       screen.getByText("确定要删除这条评论吗？此操作无法撤销。")
     ).toBeInTheDocument()

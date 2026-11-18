@@ -195,7 +195,10 @@ export function MyCommentsPage() {
                   const created = item.createdAt ?? item.created_at ?? ""
                   const likes = item.likeCount ?? item.like_count ?? 0
                   return (
-                    <TableRow key={item.id} data-testid={`comment-row-${item.id}`}>
+                    <TableRow
+                      key={item.id}
+                      data-testid={`comment-row-${item.id}`}
+                    >
                       <TableCell className="align-top">
                         <div className="space-y-1">
                           <Badge

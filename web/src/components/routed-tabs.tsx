@@ -42,7 +42,7 @@ export function RoutedTabs({
   className?: string
 }) {
   return (
-    <nav
+    <div
       className={cn(
         "inline-flex h-9 w-fit items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
         className
@@ -53,6 +53,6 @@ export function RoutedTabs({
       {tabs.map((tab) => (
         <TabLink key={tab.to} tab={tab} />
       ))}
-    </nav>
+    </div>
   )
 }
