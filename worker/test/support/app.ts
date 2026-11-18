@@ -17,15 +17,37 @@ export const TEST_SETUP_SECRET = "test-setup-secret"
 export const TEST_SIGNING_SECRET = "signing-secret-for-unit-tests-only"
 export const TEST_APP_VERSION = "v1.0.0-7-abc1234"
 
-/** 静态资源替身：只要 `/` 回 HTML，其余 404（触发 SPA 回落的前半段）。 */
+/**
+ * 静态资源替身（规格 §8 修订）：
+ * - `/` 返回根路径演示页 HTML；
+ * - `/ui/index.html` 返回 SPA 宿主 HTML；
+ * - 命中静态真实文件返回 200；
+ * - 其余路径 404（触发 /ui 的 SPA 回落或根路径的 404）。
+ */
 function assets(): Fetcher {
   return {
     fetch: async (request: Request) => {
       const { pathname } = new URL(request.url)
       if (pathname === "/") {
+        return new Response("<html>demo</html>", {
+          status: 200,
+          headers: { "content-type": "text/html" }
+        })
+      }
+      if (pathname === "/ui/index.html") {
         return new Response("<html>spa</html>", {
           status: 200,
           headers: { "content-type": "text/html" }
+        })
+      }
+      if (
+        pathname === "/client/v1.js" ||
+        pathname === "/ui/assets/index.js" ||
+        pathname.startsWith("/icons/")
+      ) {
+        return new Response("/* static asset */", {
+          status: 200,
+          headers: { "content-type": "text/plain" }
         })
       }
       return new Response("not found", { status: 404 })
