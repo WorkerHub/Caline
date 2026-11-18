@@ -20,7 +20,7 @@ export const TEST_APP_VERSION = "v1.0.0-7-abc1234"
 /**
  * 静态资源替身（规格 §8 修订）：
  * - `/` 返回根路径演示页 HTML；
- * - `/ui/index.html` 返回 SPA 宿主 HTML；
+ * - `/ui/` 返回 SPA 宿主 HTML；`/ui/index.html` 模拟 Cloudflare Assets 的 html_handling 307 规范化；
  * - 命中静态真实文件返回 200；
  * - 其余路径 404（触发 /ui 的 SPA 回落或根路径的 404）。
  */
@@ -34,10 +34,16 @@ function assets(): Fetcher {
           headers: { "content-type": "text/html" }
         })
       }
-      if (pathname === "/ui/index.html") {
+      if (pathname === "/ui/") {
         return new Response("<html>spa</html>", {
           status: 200,
           headers: { "content-type": "text/html" }
+        })
+      }
+      if (pathname === "/ui/index.html") {
+        return new Response(null, {
+          status: 307,
+          headers: { location: "/ui/" }
         })
       }
       if (
