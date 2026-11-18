@@ -51,7 +51,7 @@ export class CalineWidget {
           document.querySelector<HTMLElement>("#caline") ||
           document.querySelector<HTMLElement>("#comments") ||
           document.querySelector<HTMLElement>("#waline") ||
-          document.querySelector<HTMLElement>("[data-caline]") ||
+          document.querySelector<HTMLElement>("[data-caline]:not(script)") ||
           undefined
       }
     } else if (typeof el === "string" && typeof document !== "undefined") {
@@ -354,7 +354,7 @@ export function autoInit(): CalineWidget | null {
   )
 
   const explicitCalineContainer = document.querySelector<HTMLElement>(
-    "[data-caline], #caline"
+    "[data-caline]:not(script), #caline"
   )
 
   const hasIntent =
