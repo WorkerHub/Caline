@@ -208,7 +208,7 @@ describe("路由与根门", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("侧栏终局仅两项：管理员看到「评论」与「我的评论」，普通成员仅看到「我的评论」", async () => {
+  it("侧栏终局仅两项：管理员看到「评论管理」与「我的评论」，普通成员仅看到「我的评论」", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(
       setupState({ ownerExists: true, enabled: false })
     )
@@ -220,9 +220,9 @@ describe("路由与根门", () => {
       within(adminNav)
         .getAllByRole("link")
         .map((link) => link.textContent)
-    ).toEqual(["评论", "我的评论"])
+    ).toEqual(["评论管理", "我的评论"])
     expect(
-      within(adminNav).getByRole("link", { name: "评论" })
+      within(adminNav).getByRole("link", { name: "评论管理" })
     ).toHaveAttribute("data-active", "true")
     adminView.unmount()
 
@@ -235,7 +235,7 @@ describe("路由与根门", () => {
         .map((link) => link.textContent)
     ).toEqual(["我的评论"])
     expect(
-      within(memberNav).queryByRole("link", { name: "评论" })
+      within(memberNav).queryByRole("link", { name: "评论管理" })
     ).not.toBeInTheDocument()
     expect(
       within(memberNav).queryByRole("link", { name: "系统设置" })
@@ -254,7 +254,7 @@ describe("路由与根门", () => {
     vi.mocked(meApi.get).mockResolvedValue(me({ role: "admin" }))
     const adminView = renderAt(routes, "/workbench")
     expect(
-      await screen.findByRole("heading", { name: "评论" })
+      await screen.findByRole("heading", { name: "评论管理" })
     ).toBeInTheDocument()
     adminView.unmount()
 
@@ -286,7 +286,7 @@ describe("路由与根门", () => {
       await screen.findByRole("heading", { name: "我的评论" })
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole("heading", { name: "评论" })
+      screen.queryByRole("heading", { name: "评论管理" })
     ).not.toBeInTheDocument()
     expect(adminApi.comments).not.toHaveBeenCalled()
     view1.unmount()
@@ -462,15 +462,15 @@ describe("路由与根门", () => {
     expect(document.title).toBe(`登录 · ${PROJECT_NAME}`)
   })
 
-  it("登录态默认页标签页 title 为「评论 · 站名」", async () => {
+  it("登录态默认页标签页 title 为「评论管理 · 站名」", async () => {
     vi.mocked(setupApi.state).mockResolvedValue(
       setupState({ ownerExists: true, enabled: false })
     )
     vi.mocked(meApi.get).mockResolvedValue(me())
 
     renderAt(routes, "/comments")
-    await screen.findByRole("heading", { name: "评论" })
-    expect(document.title).toBe(`评论 · ${PROJECT_NAME}`)
+    await screen.findByRole("heading", { name: "评论管理" })
+    expect(document.title).toBe(`评论管理 · ${PROJECT_NAME}`)
   })
 
   it("侧栏站名是回评论默认页的链接，底部显示三段式版本号", async () => {
@@ -480,7 +480,7 @@ describe("路由与根门", () => {
     vi.mocked(meApi.get).mockResolvedValue(me())
 
     renderAt(routes, "/comments")
-    await screen.findByRole("heading", { name: "评论" })
+    await screen.findByRole("heading", { name: "评论管理" })
 
     const brand = screen.getByRole("link", { name: PROJECT_NAME })
     expect(brand.getAttribute("href")).toBe("/ui/comments")
@@ -504,7 +504,7 @@ describe("路由与根门", () => {
     vi.mocked(meApi.get).mockResolvedValue(me())
 
     renderAt(routes, "/comments")
-    await screen.findByRole("heading", { name: "评论" })
+    await screen.findByRole("heading", { name: "评论管理" })
 
     await accountUser().click(screen.getByRole("button", { name: "菜单" }))
 
@@ -523,7 +523,7 @@ describe("路由与根门", () => {
     localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, "false")
 
     const view = renderAt(routes, "/comments")
-    await screen.findByRole("heading", { name: "评论" })
+    await screen.findByRole("heading", { name: "评论管理" })
 
     const sidebar = view.container.querySelector('[data-slot="sidebar"]')
     expect(sidebar).toHaveAttribute("data-state", "collapsed")
@@ -549,7 +549,7 @@ describe("路由与根门", () => {
     vi.mocked(meApi.get).mockResolvedValue(me())
 
     const view = renderAt(routes, "/comments")
-    await screen.findByRole("heading", { name: "评论" })
+    await screen.findByRole("heading", { name: "评论管理" })
 
     const wrapper = view.container.querySelector(
       '[data-slot="sidebar-wrapper"]'
@@ -593,7 +593,7 @@ describe("路由与根门", () => {
     localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, "false")
 
     const view = renderAt(routes, "/comments")
-    await screen.findByRole("heading", { name: "评论" })
+    await screen.findByRole("heading", { name: "评论管理" })
 
     const sidebar = view.container.querySelector('[data-slot="sidebar"]')
     expect(sidebar).toHaveAttribute("data-state", "collapsed")
@@ -615,7 +615,7 @@ describe("路由与根门", () => {
     vi.mocked(meApi.get).mockResolvedValue(me())
 
     renderAt(routes, "/comments")
-    await screen.findByRole("heading", { name: "评论" })
+    await screen.findByRole("heading", { name: "评论管理" })
 
     const collapse = screen.getByRole("button", { name: "收起侧栏" })
     expect(collapse.textContent).toBe("")
