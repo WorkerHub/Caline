@@ -291,7 +291,9 @@ Reply to @alice and @bob
       })
       const loginLink = editor.querySelector(".cl-editor-login-prompt")
       expect(loginLink).not.toBeNull()
-      expect(loginLink?.getAttribute("href")).toBe("https://example.com/login")
+      expect(loginLink?.getAttribute("href")).toBe(
+        "https://example.com/ui/login"
+      )
       expect(loginLink?.textContent).toBe(t("login_prompt"))
     })
   })

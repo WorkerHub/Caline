@@ -39,7 +39,7 @@ export function createEditor(props: EditorProps): HTMLElement {
       <div class="cl-login-notice">
         ${props.t("guest_closed")}
         <br>
-        <a href="${props.serverUrl}/login" target="_blank" class="cl-login-link">${props.t("login_to_comment")}</a>
+        <a href="${props.serverUrl}/ui/login" target="_blank" class="cl-login-link">${props.t("login_to_comment")}</a>
       </div>
     `
     return container
@@ -75,7 +75,7 @@ export function createEditor(props: EditorProps): HTMLElement {
     <input type="text" class="cl-input cl-input-nick" placeholder="${props.t("placeholder_nick")}" value="${profile.nick || ""}" required />
     <input type="email" class="cl-input cl-input-mail" placeholder="${props.t("placeholder_mail")}" value="${profile.mail || ""}" />
     <input type="url" class="cl-input cl-input-link" placeholder="${props.t("placeholder_link")}" value="${profile.link || ""}" />
-    <a href="${props.serverUrl}/login" target="_blank" rel="noopener" class="cl-login-link cl-editor-login-prompt" style="font-size:12px;display:inline-flex;align-items:center;text-decoration:none;padding:0 4px;color:var(--cl-color-text-muted);white-space:nowrap;">${props.t("login_prompt")}</a>
+    <a href="${props.serverUrl}/ui/login" target="_blank" rel="noopener" class="cl-login-link cl-editor-login-prompt" style="font-size:12px;display:inline-flex;align-items:center;text-decoration:none;padding:0 4px;color:var(--cl-color-text-muted);white-space:nowrap;">${props.t("login_prompt")}</a>
   `
   container.appendChild(metaInputs)
 

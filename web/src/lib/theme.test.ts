@@ -45,7 +45,10 @@ describe("主题持久化", () => {
   })
 
   it("首屏内联脚本与 store 用同一个存储键，且在包体之前执行", () => {
-    const html = readFileSync(path.resolve(process.cwd(), "index.html"), "utf8")
+    const html = readFileSync(
+      path.resolve(process.cwd(), "ui/index.html"),
+      "utf8"
+    )
     expect(html).toContain(`localStorage.getItem("${THEME_STORAGE_KEY}")`)
     const scriptAt = html.indexOf("localStorage.getItem")
     const moduleAt = html.indexOf("/src/main.tsx")
