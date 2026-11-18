@@ -382,6 +382,26 @@ describe("路由与根门", () => {
     ).toHaveAttribute("data-state", "active")
     expect(screen.getByRole("button", { name: "导出备份" })).toBeInTheDocument()
     view4.unmount()
+
+    // 直达 database tab
+    const view5 = renderAt(routes, "/admin/database")
+    expect(
+      await screen.findByRole("tab", { name: "数据库维护" })
+    ).toHaveAttribute("data-state", "active")
+    expect(
+      screen.getByRole("button", { name: "检查并升级数据库" })
+    ).toBeInTheDocument()
+    view5.unmount()
+
+    // 旧址 /admin/maintenance 重定向到 /admin/database
+    const view6 = renderAt(routes, "/admin/maintenance")
+    expect(
+      await screen.findByRole("tab", { name: "数据库维护" })
+    ).toHaveAttribute("data-state", "active")
+    expect(
+      screen.getByRole("button", { name: "检查并升级数据库" })
+    ).toBeInTheDocument()
+    view6.unmount()
   })
 
   it("设置页全 tab 路径化：裸路径重定向首 tab，各 tab 直达与刷新保持", async () => {
