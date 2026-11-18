@@ -9,6 +9,7 @@ import { Hono } from "hono"
 import { wakerGateState } from "./core/waker-gate"
 import { buildWebAppManifest } from "./lib/manifest"
 import { getTablePrefix, isValidTablePrefix } from "./lib/table-prefix"
+import { corsMiddleware } from "./middleware/cors"
 import { authMiddleware } from "./middleware/auth"
 import { adminRoutes } from "./routes/admin"
 import { authRoutes } from "./routes/auth"
@@ -36,6 +37,9 @@ app.use("*", async (c, next) => {
   }
   await next()
 })
+
+// CORS 跨域治理（规格 §5）：OPTIONS 预检 204；业务响应按 safeDomains 注入 Access-Control-* 头。
+app.use("/api/*", corsMiddleware)
 
 // 未登录/敏感响应一律 no-store；路由自己设了缓存头的保留它自己的（/api/public）。
 app.use("/api/*", async (c, next) => {

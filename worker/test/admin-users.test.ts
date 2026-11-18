@@ -60,20 +60,22 @@ describe("系统管理面", () => {
     })
     expect(res.status).toBe(200)
     const raw = await res.text()
-    const body = JSON.parse(raw) as {
-      appMode: string
-      tablePrefix: string
-      registration: {
-        enabled: boolean
-        approvalRequired: boolean
-        emailVerificationRequired: boolean
-      }
-      setup: { pageEnabled: boolean }
-      email: {
-        provider: string
-        configured: boolean
-        smtp: { passwordSet: boolean }
-        resend: { apiKeySet: boolean }
+    const { data: body } = JSON.parse(raw) as {
+      data: {
+        appMode: string
+        tablePrefix: string
+        registration: {
+          enabled: boolean
+          approvalRequired: boolean
+          emailVerificationRequired: boolean
+        }
+        setup: { pageEnabled: boolean }
+        email: {
+          provider: string
+          configured: boolean
+          smtp: { passwordSet: boolean }
+          resend: { apiKeySet: boolean }
+        }
       }
     }
     expect(body.appMode).toBe("multi")
@@ -203,9 +205,13 @@ describe("全量用户列表", () => {
       headers: { cookie: admin }
     })
     expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      items: Array<Record<string, unknown>>
-    }
+    const body = (
+      (await res.json()) as {
+        data: {
+          items: Array<Record<string, unknown>>
+        }
+      }
+    ).data
 
     expect(body.items.map((item) => item.email)).toEqual([
       "owner@example.test",
@@ -248,9 +254,13 @@ describe("全量用户列表", () => {
       headers: { cookie: admin }
     })
     expect(pending.status).toBe(200)
-    const pendingBody = (await pending.json()) as {
-      items: Array<{ email: string }>
-    }
+    const pendingBody = (
+      (await pending.json()) as {
+        data: {
+          items: Array<{ email: string }>
+        }
+      }
+    ).data
     expect(pendingBody.items.map((item) => item.email)).toEqual([
       "pending@example.test"
     ])
@@ -277,13 +287,17 @@ describe("管理员手动建号", () => {
       { cookie: admin }
     )
     expect(res.status).toBe(200)
-    const created = (await res.json()) as {
-      id: number
-      email: string
-      role: string
-      status: string
-      temporaryPassword: string
-    }
+    const created = (
+      (await res.json()) as {
+        data: {
+          id: number
+          email: string
+          role: string
+          status: string
+          temporaryPassword: string
+        }
+      }
+    ).data
     expect(created).toMatchObject({
       email: "newbie@example.test",
       role: "user",
@@ -391,7 +405,9 @@ describe("管理员手动建号", () => {
       { cookie: admin }
     )
     expect(res.status).toBe(200)
-    expect(await res.json()).toMatchObject({
+    expect(
+      ((await res.json()) as { data: Record<string, unknown> }).data
+    ).toMatchObject({
       email: "boss@example.test",
       role: "admin",
       status: "active"
@@ -435,7 +451,9 @@ describe("管理员手动建号", () => {
       { cookie: admin }
     )
     expect(ignored.status).toBe(200)
-    expect(await ignored.json()).toMatchObject({
+    expect(
+      ((await ignored.json()) as { data: Record<string, unknown> }).data
+    ).toMatchObject({
       email: "u1@example.test",
       status: "active"
     })

@@ -53,9 +53,15 @@ describe("邮件未配置守卫", () => {
       "EMAIL_NOT_CONFIGURED"
     )
 
-    const view = (await (
-      await request(env, "/api/admin/settings", { headers: { cookie: admin } })
-    ).json()) as { registration: { emailVerificationRequired: boolean } }
+    const view = (
+      (await (
+        await request(env, "/api/admin/settings", {
+          headers: { cookie: admin }
+        })
+      ).json()) as {
+        data: { registration: { emailVerificationRequired: boolean } }
+      }
+    ).data
     expect(view.registration.emailVerificationRequired).toBe(false)
   })
 

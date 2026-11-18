@@ -125,9 +125,13 @@ describe("单人档", () => {
       await loginUser(env, { email: "owner@example.test" })
     )
 
-    const view = (await (
-      await request(env, "/api/admin/settings", { headers: { cookie } })
-    ).json()) as { registration: unknown; setup: { pageEnabled: boolean } }
+    const view = (
+      (await (
+        await request(env, "/api/admin/settings", { headers: { cookie } })
+      ).json()) as {
+        data: { registration: unknown; setup: { pageEnabled: boolean } }
+      }
+    ).data
     expect(view.registration).toBeNull()
 
     const write = await putJson(

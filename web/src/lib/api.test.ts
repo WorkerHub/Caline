@@ -109,3 +109,80 @@ describe("用户管理操作列端点", () => {
     ])
   })
 })
+
+describe("响应信封统一解包与错误契约（QA #7 缺陷②）", () => {
+  it("成功响应自动解包 { data: T } 信封", async () => {
+    stubFetch(200, {
+      data: {
+        items: [{ id: 1, contentRaw: "hello" }],
+        total: 1,
+        page: 1,
+        pageSize: 10,
+        totalPages: 1
+      }
+    })
+
+    const result = await adminApi.comments()
+    // 必须直接拿到解包后的 items 与 total，而不是 undefined
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0].id).toBe(1)
+    expect(result.total).toBe(1)
+  })
+
+  it("导出数据 exportData 正确剥开信封，避免备份多包一层 data", async () => {
+    const rawDump = {
+      version: "1.0.0",
+      exportedAt: "2026-11-18T00:00:00.000Z",
+      comments: [],
+      counters: [],
+      users: []
+    }
+    stubFetch(200, { data: rawDump })
+
+    const dump = await adminApi.exportData()
+    expect(dump).toEqual(rawDump)
+    expect(dump).not.toHaveProperty("data")
+  })
+
+  it("解析统一错误信封 { error: { code, message, retryAfter, details } }", async () => {
+    stubFetch(429, {
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many requests",
+        retryAfter: 45
+      }
+    })
+
+    let caught: ApiError | null = null
+    try {
+      await meApi.get()
+    } catch (err) {
+      if (err instanceof ApiError) caught = err
+    }
+
+    expect(caught).not.toBeNull()
+    expect(caught?.status).toBe(429)
+    expect(caught?.code).toBe("RATE_LIMITED")
+    expect(caught?.message).toBe("Too many requests")
+    expect(caught?.retryAfter).toBe(45)
+  })
+
+  it("兼容旧错误格式 { error: string, code: string }", async () => {
+    stubFetch(400, {
+      error: "Bad request message",
+      code: "INVALID_PARAM"
+    })
+
+    let caught: ApiError | null = null
+    try {
+      await meApi.get()
+    } catch (err) {
+      if (err instanceof ApiError) caught = err
+    }
+
+    expect(caught).not.toBeNull()
+    expect(caught?.status).toBe(400)
+    expect(caught?.code).toBe("INVALID_PARAM")
+    expect(caught?.message).toBe("Bad request message")
+  })
+})
