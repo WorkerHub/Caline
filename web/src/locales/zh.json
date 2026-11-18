@@ -174,7 +174,7 @@
     "title": "工作台",
     "nav": {
       "workbench": "工作台",
-      "comments": "评论",
+      "comments": "评论管理",
       "myComments": "我的评论",
       "siteSettings": "系统设置",
       "data": "数据",
@@ -374,7 +374,7 @@
     }
   },
   "comments": {
-    "title": "评论",
+    "title": "评论管理",
     "status": {
       "all": "全部",
       "waiting": "待审",
