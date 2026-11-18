@@ -3,7 +3,7 @@
  *
  * 验证条：
  * 1. 根路径 GET / 服务演示页；
- * 2. GET /ui 与 GET /ui/* 客户端路由回落至 SPA 宿主（/ui/index.html）；
+ * 2. GET /ui 与 GET /ui/* 客户端路由回落至 SPA 宿主（/ui/）；
  * 3. 静态资源（/client/v1.js、/ui/assets/*）优先直接返回；
  * 4. 根路径统一 SPA 回落已删除，非 /ui 的未命中路径如实返回 404；
  * 5. 未命中的 /api/* 依然返回 JSON 404。
@@ -26,7 +26,7 @@ describe("Worker 静态路由与 /ui SPA 回落（规格 §8 修订）", () => {
     expect(await res.text()).toBe("<html>demo</html>")
   })
 
-  it("GET /ui 与 GET /ui/ 回落到 SPA 宿主 /ui/index.html", async () => {
+  it("GET /ui 与 GET /ui/ 回落到 SPA 宿主 /ui/", async () => {
     const { env } = makeContext()
 
     const resNoSlash = await request(env, "/ui")

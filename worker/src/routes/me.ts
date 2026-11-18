@@ -14,12 +14,14 @@
  */
 import { Hono } from "hono"
 import type { Context } from "hono"
+import type { CommentMeItem, ListMeCommentsResult } from "@caline/shared"
 import { hashPassword } from "../core/auth"
 import { revokeAllSessions } from "../core/session"
+import { listUserComments } from "../db/queries/comments"
 import { deletePasskey, listPasskeyViews } from "../db/queries/passkeys"
 import { findUserById, updateUserFields } from "../db/queries/users"
 import { currentUserId, requirePassword } from "../lib/account"
-import { apiError, readJsonBody } from "../lib/http"
+import { apiError, calineError, calineSuccess, readJsonBody } from "../lib/http"
 import { readProfileLockSettings } from "../lib/settings"
 import { getTablePrefix } from "../lib/table-prefix"
 import { isValidTimezone } from "../lib/timezone"
@@ -36,6 +38,69 @@ meRoutes.get("/", async (c) => {
   const user = await findUserById(c.env.DB, prefix, currentUserId(c))
   if (!user) return apiError(c, 404, "USER_NOT_FOUND", "User not found")
   return c.json(await buildUserView(c.env, user))
+})
+
+/**
+ * GET /api/me/comments（规格 §4 账号区端点）：
+ * - 须登录（由全局中间件拦截未登录请求并返回 401）；
+ * - 只返回当前登录用户本人（user_id = 会话用户）的评论，含全部 status（approved/waiting/spam），按创建时间倒序分页；
+ * - 严格不接受任何指定他人 user_id 的参数（若传他人 user_id 则 400 拒绝）；
+ * - 返回字段不含 ip/ua/mail/nick 等访客或敏感字段。
+ */
+meRoutes.get("/comments", async (c) => {
+  const queryUserId = c.req.query("user_id") ?? c.req.query("userId")
+  const sessionUserId = currentUserId(c)
+  if (queryUserId !== undefined && Number(queryUserId) !== sessionUserId) {
+    return calineError(
+      c,
+      400,
+      "INVALID_PARAM",
+      "Specifying other user_id is not allowed"
+    )
+  }
+
+  const rawPage = Number(c.req.query("page"))
+  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1
+  const rawPageSize = Number(c.req.query("pageSize"))
+  const pageSize =
+    Number.isInteger(rawPageSize) && rawPageSize > 0 && rawPageSize <= 100
+      ? rawPageSize
+      : 10
+
+  const prefix = getTablePrefix(c.env)
+  const { items: rows, total } = await listUserComments(c.env.DB, prefix, {
+    userId: sessionUserId,
+    page,
+    pageSize
+  })
+
+  const items: CommentMeItem[] = rows.map((r) => ({
+    id: r.id,
+    url: r.url,
+    contentRaw: r.content_raw,
+    contentHtml: r.content_html,
+    status: r.status,
+    likeCount: r.like_count,
+    pid: r.pid,
+    rid: r.rid,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    content_raw: r.content_raw,
+    content_html: r.content_html,
+    like_count: r.like_count,
+    created_at: r.created_at,
+    updated_at: r.updated_at
+  }))
+
+  const result: ListMeCommentsResult = {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize)
+  }
+
+  return calineSuccess(c, result)
 })
 
 /** 资料与偏好：只更新请求体里出现的字段；非法值整单拒绝。 */

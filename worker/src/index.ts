@@ -113,21 +113,17 @@ app.get("/api/health", (c) => c.json({ status: "ok" }))
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404))
 
 // 后台与鉴权 SPA 回落（规格 §8 修订）：/ui 与 /ui/* 静态资源命中直接返回；
-// 未命中（SPA 客户端路由如 /ui/login、/ui/setup、/ui/comments）回落至 /ui/index.html。
+// 未命中（SPA 客户端路由如 /ui/login、/ui/setup、/ui/comments）回落至 /ui/。
 app.get("/ui", async (c) => {
   const res = await c.env.ASSETS.fetch(c.req.raw)
   if (res.status !== 404) return res
-  return c.env.ASSETS.fetch(
-    new Request(new URL("/ui/index.html", c.req.url), c.req.raw)
-  )
+  return c.env.ASSETS.fetch(new Request(new URL("/ui/", c.req.url), c.req.raw))
 })
 
 app.get("/ui/*", async (c) => {
   const res = await c.env.ASSETS.fetch(c.req.raw)
   if (res.status !== 404) return res
-  return c.env.ASSETS.fetch(
-    new Request(new URL("/ui/index.html", c.req.url), c.req.raw)
-  )
+  return c.env.ASSETS.fetch(new Request(new URL("/ui/", c.req.url), c.req.raw))
 })
 
 // 根路径演示页与其它静态资源（规格 §8 修订）：
