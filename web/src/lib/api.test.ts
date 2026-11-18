@@ -185,4 +185,33 @@ describe("响应信封统一解包与错误契约（QA #7 缺陷②）", () => {
     expect(caught?.code).toBe("INVALID_PARAM")
     expect(caught?.message).toBe("Bad request message")
   })
+
+  it("meApi.comments 正确构造 query 并解包 data 信封", async () => {
+    let requestedUrl = ""
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        requestedUrl = url
+        return respond(200, {
+          data: {
+            items: [],
+            total: 0,
+            page: 2,
+            pageSize: 20,
+            totalPages: 0
+          }
+        })
+      })
+    )
+
+    const res = await meApi.comments({ page: 2, pageSize: 20 })
+    expect(requestedUrl).toBe("/api/me/comments?page=2&pageSize=20")
+    expect(res).toEqual({
+      items: [],
+      total: 0,
+      page: 2,
+      pageSize: 20,
+      totalPages: 0
+    })
+  })
 })

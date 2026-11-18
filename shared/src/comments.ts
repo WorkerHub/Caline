@@ -144,3 +144,37 @@ export interface RecentCommentItem {
 
 /** GET /api/comments/recent 响应 data 形状 */
 export type RecentCommentsResult = RecentCommentItem[]
+
+/** GET /api/me/comments 个人评论列表项（不含 ip/ua/mail） */
+export interface CommentMeItem {
+  id: number
+  url: string
+  contentRaw: string
+  contentHtml: string
+  status: CommentStatus
+  likeCount: number
+  pid: number | null
+  rid: number | null
+  createdAt: string
+  updatedAt: string
+  content_raw?: string
+  content_html?: string
+  like_count?: number
+  created_at?: string
+  updated_at?: string
+}
+
+/** GET /api/me/comments 查询参数 */
+export interface ListMeCommentsQuery {
+  page?: number
+  pageSize?: number
+}
+
+/** GET /api/me/comments 响应 data 形状 */
+export interface ListMeCommentsResult {
+  items: CommentMeItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}

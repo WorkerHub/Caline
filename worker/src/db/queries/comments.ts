@@ -456,6 +456,40 @@ export async function adminSearchComments(
   return { items: items.results, total }
 }
 
+export interface ListUserCommentsOptions {
+  userId: number
+  page: number
+  pageSize: number
+}
+
+/** 查用户本人评论列表（含全部 status，按 created_at 倒序分页） */
+export async function listUserComments(
+  db: D1Database,
+  prefix: string,
+  options: ListUserCommentsOptions
+): Promise<{ items: CommentRow[]; total: number }> {
+  const table = commentTable(prefix)
+  const countRow = await db
+    .prepare(`SELECT COUNT(*) AS total FROM ${table} WHERE user_id = ?`)
+    .bind(options.userId)
+    .first<{ total: number }>()
+
+  const total = Number(countRow?.total ?? 0)
+  const offset = (options.page - 1) * options.pageSize
+
+  const items = await db
+    .prepare(
+      `SELECT ${COMMENT_COLUMNS} FROM ${table}
+       WHERE user_id = ?
+       ORDER BY created_at DESC, id DESC
+       LIMIT ? OFFSET ?`
+    )
+    .bind(options.userId, options.pageSize, offset)
+    .all<CommentRow>()
+
+  return { items: items.results, total }
+}
+
 export async function adminUpdateCommentFields(
   db: D1Database,
   prefix: string,
