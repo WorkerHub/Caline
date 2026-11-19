@@ -1,15 +1,13 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { adminApi } from "@/lib/api"
 import { describeApiError } from "@/lib/api-errors"
-import type { AdminSettings, SetupResult } from "@/lib/api-types"
+import type { AdminSettings } from "@/lib/api-types"
 
 /**
  * 系统管理 · 数据库维护（规格 §5.3.5、§6.1）。
  *
- * 与初始化页调同一个迁移 runner，回显形状一致；管理员会话即凭证，不再要密钥。
  * 「开放初始化页面」只门控页面，不门控密钥接口。
  */
 export function MaintenanceSection({
@@ -20,22 +18,7 @@ export function MaintenanceSection({
   onSaved: (settings: AdminSettings) => void
 }) {
   const { t } = useTranslation()
-  const [result, setResult] = useState<SetupResult | null>(null)
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-
-  const run = async () => {
-    setBusy(true)
-    setError("")
-    try {
-      const outcome = await adminApi.runSetup()
-      setResult(outcome)
-    } catch (runError) {
-      setError(describeApiError(t, runError))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const toggleSetupPage = async (enabled: boolean) => {
     setError("")
@@ -77,46 +60,10 @@ export function MaintenanceSection({
         </dd>
       </dl>
 
-      <Button
-        type="button"
-        variant="outline"
-        disabled={busy}
-        onClick={() => void run()}
-      >
-        {busy ? t("admin.maintenance.running") : t("admin.maintenance.run")}
-      </Button>
-
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
-      ) : null}
-
-      {result ? (
-        <div className="space-y-2 rounded-lg bg-muted/50 p-3 text-sm">
-          <p className="font-medium">{t("admin.maintenance.done")}</p>
-          <p className="text-xs text-muted-foreground">
-            {t("admin.maintenance.tablePrefix")}
-          </p>
-          <p className="font-mono text-xs">
-            {result.tablePrefix || t("setup.noPrefix")}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {t("admin.maintenance.migrations")}
-          </p>
-          <ul className="space-y-1 text-xs">
-            {result.migrations.map((migration) => (
-              <li key={migration.name} className="flex justify-between gap-3">
-                <span className="font-mono">{migration.name}</span>
-                <span className="text-muted-foreground">
-                  {migration.status === "applied"
-                    ? t("admin.maintenance.applied")
-                    : t("admin.maintenance.skipped")}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
       ) : null}
     </section>
   )

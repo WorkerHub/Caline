@@ -34,7 +34,6 @@ import type {
   LoginResult,
   Me,
   MeUpdateInput,
-  MigrationResult,
   PasskeySummary,
   PublicInfo,
   RegisterResult,
@@ -342,10 +341,6 @@ export const commentsApi = {
 
 /* 系统管理 */
 
-export interface AdminSetupResult extends SetupResult {
-  migrations: MigrationResult[]
-}
-
 export const adminApi = {
   settings: () => request<AdminSettings>("/admin/settings"),
 
@@ -441,7 +436,5 @@ export const adminApi = {
     request<AdminImportResult>("/admin/import", {
       method: "POST",
       body: input
-    }),
-
-  runSetup: () => request<AdminSetupResult>("/admin/setup", { method: "POST" })
+    })
 }

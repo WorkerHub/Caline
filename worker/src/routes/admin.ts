@@ -62,7 +62,6 @@ import type {
   ExportUserRow
 } from "@caline/shared"
 
-import { runSetup } from "../lib/setup"
 import { getTablePrefix } from "../lib/table-prefix"
 import { isValidTimezone } from "../lib/timezone"
 import { normalizeLanguage, renderTestEmail } from "../locales/email"
@@ -80,19 +79,6 @@ import type { HonoEnv } from "../types"
 export const adminRoutes = new Hono<HonoEnv>()
 
 adminRoutes.use("*", adminMiddleware)
-
-adminRoutes.post("/setup", async (c) => {
-  try {
-    const result = await runSetup(c.env)
-    return c.json(result, result.success ? 200 : 409)
-  } catch (err) {
-    console.error(
-      "Admin setup failed:",
-      err instanceof Error ? err.message : err
-    )
-    return c.json({ error: "Setup failed" }, 500)
-  }
-})
 
 adminRoutes.get("/settings", async (c) => {
   const base = await buildAdminSettings(c.env)
