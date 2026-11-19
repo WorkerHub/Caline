@@ -388,9 +388,7 @@ describe("路由与根门", () => {
     expect(
       await screen.findByRole("tab", { name: "数据库维护" })
     ).toHaveAttribute("data-state", "active")
-    expect(
-      screen.getByRole("button", { name: "检查并升级数据库" })
-    ).toBeInTheDocument()
+    expect(await screen.findByText("开放初始化页面")).toBeInTheDocument()
     view5.unmount()
 
     // 旧址 /admin/maintenance 重定向到 /admin/database
@@ -398,9 +396,7 @@ describe("路由与根门", () => {
     expect(
       await screen.findByRole("tab", { name: "数据库维护" })
     ).toHaveAttribute("data-state", "active")
-    expect(
-      screen.getByRole("button", { name: "检查并升级数据库" })
-    ).toBeInTheDocument()
+    expect(await screen.findByText("开放初始化页面")).toBeInTheDocument()
     view6.unmount()
   })
 
