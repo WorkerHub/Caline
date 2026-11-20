@@ -30,8 +30,7 @@ export const PAGE_TITLE_KEYS: Record<string, string> = {
   "/admin/users": "admin.tabs.users",
   "/admin/comment-settings": "admin.tabs.commentSettings",
   "/admin/import-export": "admin.tabs.importExport",
-  "/admin/database": "admin.tabs.maintenance",
-  "/admin/maintenance": "admin.tabs.maintenance"
+  "/admin/others": "admin.tabs.others"
 }
 
 /** 按当前路径取标题 key，未命中回落 errors.notFound。 */

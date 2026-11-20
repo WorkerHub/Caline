@@ -90,7 +90,7 @@ function AdminPageInner() {
     { to: "/admin/users", label: t("admin.tabs.users") },
     { to: "/admin/comment-settings", label: t("admin.tabs.commentSettings") },
     { to: "/admin/import-export", label: t("admin.tabs.importExport") },
-    { to: "/admin/database", label: t("admin.tabs.maintenance") }
+    { to: "/admin/others", label: t("admin.tabs.others") }
   ]
 
   const isKnownTab =
@@ -99,11 +99,7 @@ function AdminPageInner() {
     location.pathname.startsWith("/admin/users") ||
     location.pathname.startsWith("/admin/comment-settings") ||
     location.pathname.startsWith("/admin/import-export") ||
-    location.pathname.startsWith("/admin/database")
-
-  if (location.pathname.startsWith("/admin/maintenance")) {
-    return <Navigate to="/admin/database" replace />
-  }
+    location.pathname.startsWith("/admin/others")
 
   if (
     location.pathname === "/admin" ||
@@ -133,10 +129,7 @@ function AdminPageInner() {
     if (location.pathname.startsWith("/admin/import-export")) {
       return <DataPage />
     }
-    if (
-      location.pathname.startsWith("/admin/database") ||
-      location.pathname.startsWith("/admin/maintenance")
-    ) {
+    if (location.pathname.startsWith("/admin/others")) {
       return (
         <MaintenanceSection settings={loadedSettings} onSaved={setSettings} />
       )
@@ -177,7 +170,7 @@ function AdminPageInner() {
 /**
  * 系统管理页（规格 §6.1，仅管理员）：
  * 六 tab 路径段子路由（/admin/email、/admin/registration、/admin/users、
- * /admin/comment-settings、/admin/import-export、/admin/database）。
+ * /admin/comment-settings、/admin/import-export、/admin/others）。
  * 裸路径重定向首 tab，全站无状态切换式 tab 残留。
  */
 export function AdminPage() {
