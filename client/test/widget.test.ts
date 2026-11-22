@@ -1000,6 +1000,70 @@ Reply to @alice and @bob
         expect(editorSlot?.querySelector(".cl-editor-login-prompt")).not.toBeNull()
       })
 
+      it("keeps logged-in state and alerts error when logout request fails", async () => {
+        document.body.innerHTML = '<div id="caline"></div>'
+        const alertMock = vi.spyOn(window, "alert").mockImplementation(() => {})
+
+        const fetchMock = vi
+          .fn()
+          .mockImplementation((url: string, init?: RequestInit) => {
+            if (url.includes("/api/auth/logout") && init?.method === "POST") {
+              return Promise.reject(new Error("Logout network timeout"))
+            }
+            if (url.includes("/api/auth/me")) {
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({ data: mockUser })
+              })
+            }
+            if (url.includes("/api/comments")) {
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  data: {
+                    items: [],
+                    total: 0,
+                    page: 1,
+                    pageSize: 10,
+                    totalPages: 0
+                  }
+                })
+              })
+            }
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ data: {} })
+            })
+          })
+        window.fetch = fetchMock as unknown as typeof fetch
+
+        const widget = init({ el: "#caline", serverURL: "https://example.com" })
+        await widget.checkAuth()
+
+        const editorSlot = document.querySelector(".cl-editor-slot")
+        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+
+        // 点击退出登录
+        const logoutBtn = editorSlot?.querySelector(
+          ".cl-editor-logout-btn"
+        ) as HTMLButtonElement
+        expect(logoutBtn).not.toBeNull()
+        logoutBtn.click()
+
+        await vi.waitFor(() => {
+          expect(alertMock).toHaveBeenCalledWith("Logout network timeout")
+        })
+
+        // 验证失败后未脱离登录态，仍保持登录 UI，未展示访客表单
+        expect(widget.user).toEqual(mockUser)
+        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+        expect(editorSlot?.querySelector(".cl-editor-meta-inputs")).toBeNull()
+        expect(logoutBtn.disabled).toBe(false)
+      })
+
       it("submits comment without guest fields when logged in", async () => {
         document.body.innerHTML = '<div id="caline"></div>'
         let createCommentPayload: Record<string, unknown> | null = null

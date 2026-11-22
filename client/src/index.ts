@@ -26,7 +26,6 @@ export interface CalineInitOptions {
   lang?: string
   pageSize?: number
   wordLimit?: number
-  user?: AuthMe | null
 }
 
 export class CalineWidget {
@@ -100,7 +99,6 @@ export class CalineWidget {
     const lang = resolveLanguage(options.lang)
     this.t = createTranslator(lang)
     this.client = new CalineApiClient(this.serverUrl)
-    this.currentUser = options.user || null
 
     this.renderSkeleton()
     void this.checkAuth()
@@ -172,8 +170,9 @@ export class CalineWidget {
   async checkAuth(): Promise<AuthMe | null> {
     try {
       const user = await this.client.getMe()
+      const prevUser = this.currentUser
       this.currentUser = user
-      if (user) {
+      if (user || prevUser) {
         this.renderMainEditor()
         if (this.currentReplyTarget) {
           this.showReplyEditor(
@@ -184,17 +183,23 @@ export class CalineWidget {
       }
       return user
     } catch {
+      const prevUser = this.currentUser
       this.currentUser = null
+      if (prevUser) {
+        this.renderMainEditor()
+        if (this.currentReplyTarget) {
+          this.showReplyEditor(
+            this.currentReplyTarget.comment,
+            this.currentReplyTarget.rootId
+          )
+        }
+      }
       return null
     }
   }
 
   async handleLogout(): Promise<void> {
-    try {
-      await this.client.logout()
-    } catch {
-      // 容错处理
-    }
+    await this.client.logout()
     this.currentUser = null
     this.renderMainEditor()
     if (this.currentReplyTarget) {
