@@ -9,7 +9,11 @@ import { CalineApiClient } from "./api/client"
 import { createEditor } from "./components/editor"
 import { renderCommentTree } from "./components/comment-tree"
 import { createTranslator, resolveLanguage } from "./i18n/locales"
-import type { CommentPublicItem, CommentSortOrder } from "@caline/shared"
+import type {
+  AuthMe,
+  CommentPublicItem,
+  CommentSortOrder
+} from "@caline/shared"
 import { saveEditToken } from "./utils/storage"
 import { commentCount, pageview, reaction } from "./widgets/counters"
 import { recentComments } from "./widgets/recent"
@@ -22,6 +26,7 @@ export interface CalineInitOptions {
   lang?: string
   pageSize?: number
   wordLimit?: number
+  user?: AuthMe | null
 }
 
 export class CalineWidget {
@@ -37,6 +42,11 @@ export class CalineWidget {
   private totalComments = 0
   private comments: CommentPublicItem[] = []
   private t: ReturnType<typeof createTranslator>
+  private currentUser: AuthMe | null = null
+  private currentReplyTarget: {
+    comment: { id: number; nick: string }
+    rootId: number
+  } | null = null
 
   private editorContainer!: HTMLElement
   private treeContainer!: HTMLElement
@@ -90,8 +100,10 @@ export class CalineWidget {
     const lang = resolveLanguage(options.lang)
     this.t = createTranslator(lang)
     this.client = new CalineApiClient(this.serverUrl)
+    this.currentUser = options.user || null
 
     this.renderSkeleton()
+    void this.checkAuth()
     this.loadComments()
   }
 
@@ -153,20 +165,70 @@ export class CalineWidget {
     this.renderMainEditor()
   }
 
+  get user(): AuthMe | null {
+    return this.currentUser
+  }
+
+  async checkAuth(): Promise<AuthMe | null> {
+    try {
+      const user = await this.client.getMe()
+      this.currentUser = user
+      if (user) {
+        this.renderMainEditor()
+        if (this.currentReplyTarget) {
+          this.showReplyEditor(
+            this.currentReplyTarget.comment,
+            this.currentReplyTarget.rootId
+          )
+        }
+      }
+      return user
+    } catch {
+      this.currentUser = null
+      return null
+    }
+  }
+
+  async handleLogout(): Promise<void> {
+    try {
+      await this.client.logout()
+    } catch {
+      // 容错处理
+    }
+    this.currentUser = null
+    this.renderMainEditor()
+    if (this.currentReplyTarget) {
+      this.showReplyEditor(
+        this.currentReplyTarget.comment,
+        this.currentReplyTarget.rootId
+      )
+    }
+  }
+
   private renderMainEditor() {
     this.editorContainer.innerHTML = ""
     const editor = createEditor({
       t: this.t,
       wordLimit: this.wordLimit,
       serverUrl: this.serverUrl,
+      user: this.currentUser,
+      onLogout: () => this.handleLogout(),
       onSubmit: async (data) => {
-        const res = await this.client.createComment({
+        const payload: {
+          url: string
+          content: string
+          nick?: string
+          mail?: string
+          link?: string
+        } = {
           url: this.path,
-          content: data.content,
-          nick: data.nick,
-          mail: data.mail,
-          link: data.link
-        })
+          content: data.content
+        }
+        if (data.nick) payload.nick = data.nick
+        if (data.mail) payload.mail = data.mail
+        if (data.link) payload.link = data.link
+
+        const res = await this.client.createComment(payload)
 
         // 若有下发访客 15 分钟编辑 token，记录到 localStorage
         if (res.editToken) {
@@ -244,6 +306,8 @@ export class CalineWidget {
     comment: { id: number; nick: string },
     rootId: number
   ) {
+    this.currentReplyTarget = { comment, rootId }
+
     // 移除已有回复框
     const existing = this.treeContainer.querySelector(".cl-reply-editor-slot")
     if (existing) existing.remove()
@@ -261,25 +325,41 @@ export class CalineWidget {
       t: this.t,
       wordLimit: this.wordLimit,
       serverUrl: this.serverUrl,
+      user: this.currentUser,
+      onLogout: () => this.handleLogout(),
       replyTarget: {
         nick: comment.nick || this.t("guest"),
-        onCancel: () => replySlot.remove()
+        onCancel: () => {
+          this.currentReplyTarget = null
+          replySlot.remove()
+        }
       },
       onSubmit: async (data) => {
-        const res = await this.client.createComment({
+        const payload: {
+          url: string
+          content: string
+          pid: number
+          rid: number
+          nick?: string
+          mail?: string
+          link?: string
+        } = {
           url: this.path,
           content: data.content,
           pid: comment.id,
-          rid: rootId,
-          nick: data.nick,
-          mail: data.mail,
-          link: data.link
-        })
+          rid: rootId
+        }
+        if (data.nick) payload.nick = data.nick
+        if (data.mail) payload.mail = data.mail
+        if (data.link) payload.link = data.link
+
+        const res = await this.client.createComment(payload)
 
         if (res.editToken) {
           saveEditToken(res.comment.id, res.editToken)
         }
 
+        this.currentReplyTarget = null
         replySlot.remove()
         this.currentPage = 1
         await this.loadComments(true)

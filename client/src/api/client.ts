@@ -4,6 +4,7 @@
 
 import type {
   ApiResponse,
+  AuthMe,
   CommentCountsResult,
   CommentSortOrder,
   CreateCommentInput,
@@ -51,14 +52,29 @@ export class CalineApiClient {
       credentials: "include" // 携带可能存在的 Cookie 登录态
     })
 
-    const json = (await res.json()) as ApiResponse<T>
-    if ("error" in json) {
+    const json = (await res.json().catch(() => ({}))) as
+      | ApiResponse<T>
+      | Record<string, unknown>
+    const isError =
+      res.ok === false ||
+      (typeof res.status === "number" && res.status >= 400) ||
+      Boolean(json && typeof json === "object" && "error" in json)
+
+    if (isError) {
+      const err = (json as { error?: { message?: string; code?: string } })
+        ?.error
       throw new Error(
-        json.error.message || `Request failed with code ${json.error.code}`
+        err?.message ||
+          (err?.code ? `Request failed with code ${err.code}` : undefined) ||
+          `Request failed with status ${res.status}`
       )
     }
 
-    return json.data
+    if (json && typeof json === "object" && "data" in json) {
+      return (json as { data: T }).data
+    }
+
+    return json as T
   }
 
   // 1. 获取评论列表 (GET /api/comments)
@@ -159,6 +175,26 @@ export class CalineApiClient {
     return this.request<PageReactionResult>("/api/pages/reaction", {
       method: "POST",
       body: JSON.stringify(input)
+    })
+  }
+
+  // 10. 获取当前登录用户 (GET /api/auth/me)
+  async getMe(): Promise<AuthMe | null> {
+    try {
+      const res = await this.request<AuthMe>("/api/auth/me")
+      if (res && typeof res === "object" && "id" in res) {
+        return res
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  // 11. 退出登录 (POST /api/auth/logout)
+  async logout(): Promise<void> {
+    await this.request<{ success: true }>("/api/auth/logout", {
+      method: "POST"
     })
   }
 }

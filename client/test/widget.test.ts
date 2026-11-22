@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from "vitest"
+import type { AuthMe } from "@caline/shared"
 import { resolveLanguage, createTranslator } from "../src/i18n/locales"
 import { renderMarkdownPreview, isSafeHttpUrl } from "../src/utils/markdown"
 import {
@@ -581,6 +582,615 @@ Reply to @alice and @bob
       Object.defineProperty(document, "readyState", {
         value: "complete",
         configurable: true
+      })
+    })
+  })
+
+  describe("Logged-in mode and auth session handling", () => {
+    const mockUser: AuthMe = {
+      id: 42,
+      email: "alice@example.com",
+      displayName: "Alice",
+      avatar: "https://example.com/alice.jpg",
+      role: "user",
+      status: "active",
+      emailVerified: true,
+      mustChangePassword: false,
+      language: "zh-CN",
+      timezone: "UTC",
+      totpEnabled: false,
+      emailTwoFactorEnabled: false,
+      passkeyCount: 0,
+      profileLocks: { displayNameLocked: false }
+    }
+
+    it("supports posting_as and logout i18n keys with parameter interpolation", () => {
+      const tZh = createTranslator("zh-CN")
+      expect(tZh("posting_as", { name: "Alice" })).toBe("以 Alice 身份发表")
+      expect(tZh("logout")).toBe("退出登录")
+
+      const tEn = createTranslator("en")
+      expect(tEn("posting_as", { name: "Alice" })).toBe("Posting as Alice")
+      expect(tEn("logout")).toBe("Sign out")
+    })
+
+    describe("Editor component in logged-in vs guest mode", () => {
+      it("renders identity header, hides guest fields, and shows logout button in logged-in mode (zh-CN)", () => {
+        const t = createTranslator("zh-CN")
+        const onLogout = vi.fn()
+        const onSubmit = vi.fn()
+
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          user: mockUser,
+          onLogout,
+          onSubmit
+        })
+
+        // 身份栏存在
+        const identityBar = editor.querySelector(".cl-editor-identity-bar")
+        expect(identityBar).not.toBeNull()
+
+        // 头像
+        const avatar = editor.querySelector(".cl-editor-avatar") as HTMLImageElement
+        expect(avatar).not.toBeNull()
+        expect(avatar.src).toBe("https://example.com/alice.jpg")
+        expect(avatar.alt).toBe("Alice")
+
+        // 身份文案及昵称高亮
+        const notice = editor.querySelector(".cl-editor-identity-notice")
+        expect(notice).not.toBeNull()
+        expect(notice?.textContent).toBe("以 Alice 身份发表")
+        expect(editor.querySelector(".cl-editor-user-name")?.textContent).toBe("Alice")
+
+        // 退出登录按钮
+        const logoutBtn = editor.querySelector(".cl-editor-logout-btn") as HTMLButtonElement
+        expect(logoutBtn).not.toBeNull()
+        expect(logoutBtn.textContent).toBe("退出登录")
+
+        // 访客表单及登录提示应被隐藏
+        expect(editor.querySelector(".cl-editor-meta-inputs")).toBeNull()
+        expect(editor.querySelector(".cl-input-nick")).toBeNull()
+        expect(editor.querySelector(".cl-input-mail")).toBeNull()
+        expect(editor.querySelector(".cl-input-link")).toBeNull()
+        expect(editor.querySelector(".cl-editor-login-prompt")).toBeNull()
+      })
+
+      it("renders identity header in en-US mode", () => {
+        const t = createTranslator("en")
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          user: mockUser,
+          onSubmit: vi.fn()
+        })
+
+        const notice = editor.querySelector(".cl-editor-identity-notice")
+        expect(notice?.textContent).toBe("Posting as Alice")
+        const logoutBtn = editor.querySelector(".cl-editor-logout-btn")
+        expect(logoutBtn?.textContent).toBe("Sign out")
+      })
+
+      it("falls back to default avatar and email prefix when avatar and displayName are missing", () => {
+        const t = createTranslator("zh-CN")
+        const userWithoutProfile: AuthMe = {
+          ...mockUser,
+          displayName: "",
+          avatar: undefined,
+          email: "charlie@example.com"
+        }
+
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          user: userWithoutProfile,
+          onSubmit: vi.fn()
+        })
+
+        const avatar = editor.querySelector(".cl-editor-avatar") as HTMLImageElement
+        expect(avatar.src).toContain("data:image/svg+xml")
+        const notice = editor.querySelector(".cl-editor-identity-notice")
+        expect(notice?.textContent).toBe("以 charlie 身份发表")
+      })
+
+      it("submits comments without guest fields in logged-in mode", async () => {
+        const t = createTranslator("zh-CN")
+        const onSubmit = vi.fn().mockResolvedValue(undefined)
+
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          user: mockUser,
+          onSubmit
+        })
+
+        const textarea = editor.querySelector(".cl-textarea") as HTMLTextAreaElement
+        textarea.value = "Hello logged-in comment!"
+        textarea.dispatchEvent(new Event("input"))
+
+        const submitBtn = editor.querySelector(".cl-btn-primary") as HTMLButtonElement
+        expect(submitBtn.disabled).toBe(false)
+        submitBtn.click()
+
+        expect(onSubmit).toHaveBeenCalledWith({
+          content: "Hello logged-in comment!",
+          nick: undefined,
+          mail: undefined,
+          link: undefined
+        })
+      })
+
+      it("triggers onLogout handler when logout button is clicked", async () => {
+        const t = createTranslator("zh-CN")
+        const onLogout = vi.fn().mockResolvedValue(undefined)
+
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          user: mockUser,
+          onLogout,
+          onSubmit: vi.fn()
+        })
+
+        const logoutBtn = editor.querySelector(".cl-editor-logout-btn") as HTMLButtonElement
+        logoutBtn.click()
+
+        expect(onLogout).toHaveBeenCalled()
+      })
+
+      it("allows commenting when isGuestDisabled is true if user is logged in", () => {
+        const t = createTranslator("zh-CN")
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          isGuestDisabled: true,
+          user: mockUser,
+          onSubmit: vi.fn()
+        })
+
+        // 未被拦截为访客关闭提示
+        expect(editor.querySelector(".cl-login-notice")).toBeNull()
+        expect(editor.querySelector(".cl-textarea")).not.toBeNull()
+        expect(editor.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+      })
+    })
+
+    describe("ApiClient getMe and logout", () => {
+      it("getMe returns user data on 200 response", async () => {
+        const client = new CalineApiClient("https://example.com")
+        window.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: mockUser })
+        }) as unknown as typeof fetch
+
+        const user = await client.getMe()
+        expect(user).toEqual(mockUser)
+        expect(window.fetch).toHaveBeenCalledWith(
+          "https://example.com/api/auth/me",
+          expect.objectContaining({ credentials: "include" })
+        )
+      })
+
+      it("getMe returns null on 401 unauthorized or network error", async () => {
+        const client = new CalineApiClient("https://example.com")
+        window.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          json: async () => ({
+            error: { code: "UNAUTHORIZED", message: "Sign in required" }
+          })
+        }) as unknown as typeof fetch
+
+        const user = await client.getMe()
+        expect(user).toBeNull()
+
+        // 网络异常
+        window.fetch = vi.fn().mockRejectedValue(new Error("Network offline"))
+        const userAfterNetworkError = await client.getMe()
+        expect(userAfterNetworkError).toBeNull()
+      })
+
+      it("logout calls POST /api/auth/logout with credentials", async () => {
+        const client = new CalineApiClient("https://example.com")
+        window.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true })
+        }) as unknown as typeof fetch
+
+        await client.logout()
+        expect(window.fetch).toHaveBeenCalledWith(
+          "https://example.com/api/auth/logout",
+          expect.objectContaining({
+            method: "POST",
+            credentials: "include"
+          })
+        )
+      })
+    })
+
+    describe("CalineWidget end-to-end auth state flow", () => {
+      it("probes /api/auth/me on init and transitions to logged-in editor", async () => {
+        document.body.innerHTML = '<div id="caline"></div>'
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+          if (url.includes("/api/auth/me")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ data: mockUser })
+            })
+          }
+          if (url.includes("/api/comments")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  items: [],
+                  total: 0,
+                  page: 1,
+                  pageSize: 10,
+                  totalPages: 0
+                }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: {} })
+          })
+        })
+        window.fetch = fetchMock as unknown as typeof fetch
+
+        const widget = init({ el: "#caline", serverURL: "https://example.com" })
+        expect(widget).toBeDefined()
+
+        // 等待异步 checkAuth 完成
+        await widget.checkAuth()
+
+        const editorSlot = document.querySelector(".cl-editor-slot")
+        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+        expect(editorSlot?.querySelector(".cl-editor-avatar")).not.toBeNull()
+        expect(editorSlot?.querySelector(".cl-editor-identity-notice")?.textContent).toBe(
+          "以 Alice 身份发表"
+        )
+        expect(editorSlot?.querySelector(".cl-editor-meta-inputs")).toBeNull()
+      })
+
+      it("falls back cleanly to guest mode on 401 without blocking comments loading", async () => {
+        document.body.innerHTML = '<div id="caline"></div>'
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+          if (url.includes("/api/auth/me")) {
+            return Promise.resolve({
+              ok: false,
+              status: 401,
+              json: async () => ({
+                error: { code: "UNAUTHORIZED", message: "Sign in required" }
+              })
+            })
+          }
+          if (url.includes("/api/comments")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  items: [
+                    {
+                      id: 1,
+                      url: "/",
+                      nick: "GuestPoster",
+                      avatar: "https://example.com/avatar.png",
+                      contentHtml: "<p>Hello</p>",
+                      createdAt: new Date().toISOString(),
+                      likes: 0,
+                      sticky: false
+                    }
+                  ],
+                  total: 1,
+                  page: 1,
+                  pageSize: 10,
+                  totalPages: 1
+                }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: {} })
+          })
+        })
+        window.fetch = fetchMock as unknown as typeof fetch
+
+        const widget = init({ el: "#caline", serverURL: "https://example.com" })
+        await widget.checkAuth()
+
+        // 访客表单正常展现
+        const editorSlot = document.querySelector(".cl-editor-slot")
+        expect(editorSlot?.querySelector(".cl-editor-meta-inputs")).not.toBeNull()
+        expect(editorSlot?.querySelector(".cl-input-nick")).not.toBeNull()
+        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).toBeNull()
+
+        // 评论列表成功加载，未被鉴权失败阻塞
+        const treeSlot = document.querySelector(".cl-tree-slot")
+        expect(treeSlot?.textContent).toContain("GuestPoster")
+      })
+
+      it("switches from logged-in mode back to guest mode when logout is clicked without page reload", async () => {
+        document.body.innerHTML = '<div id="caline"></div>'
+        let loggedIn = true
+
+        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/api/auth/logout") && init?.method === "POST") {
+            loggedIn = false
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ success: true })
+            })
+          }
+          if (url.includes("/api/auth/me")) {
+            if (loggedIn) {
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({ data: mockUser })
+              })
+            }
+            return Promise.resolve({
+              ok: false,
+              status: 401,
+              json: async () => ({ error: { code: "UNAUTHORIZED", message: "Sign in required" } })
+            })
+          }
+          if (url.includes("/api/comments")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  items: [],
+                  total: 0,
+                  page: 1,
+                  pageSize: 10,
+                  totalPages: 0
+                }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: {} })
+          })
+        })
+        window.fetch = fetchMock as unknown as typeof fetch
+
+        const widget = init({ el: "#caline", serverURL: "https://example.com" })
+        await widget.checkAuth()
+
+        const editorSlot = document.querySelector(".cl-editor-slot")
+        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+
+        // 点击退出登录
+        const logoutBtn = editorSlot?.querySelector(
+          ".cl-editor-logout-btn"
+        ) as HTMLButtonElement
+        expect(logoutBtn).not.toBeNull()
+        logoutBtn.click()
+
+        await vi.waitFor(() => {
+          expect(widget.user).toBeNull()
+        })
+
+        // 验证 POST /api/auth/logout 已被调用
+        expect(fetchMock).toHaveBeenCalledWith(
+          "https://example.com/api/auth/logout",
+          expect.objectContaining({ method: "POST" })
+        )
+
+        // 验证无需刷新页面，主发表框无缝切回访客模式
+        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).toBeNull()
+        expect(editorSlot?.querySelector(".cl-editor-meta-inputs")).not.toBeNull()
+        expect(editorSlot?.querySelector(".cl-input-nick")).not.toBeNull()
+        expect(editorSlot?.querySelector(".cl-editor-login-prompt")).not.toBeNull()
+      })
+
+      it("submits comment without guest fields when logged in", async () => {
+        document.body.innerHTML = '<div id="caline"></div>'
+        let createCommentPayload: Record<string, unknown> | null = null
+
+        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/api/auth/me")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ data: mockUser })
+            })
+          }
+          if (url.includes("/api/comments") && init?.method === "POST") {
+            createCommentPayload = JSON.parse(init.body as string)
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  comment: {
+                    id: 99,
+                    url: "/",
+                    status: "approved",
+                    contentHtml: "<p>Logged in comment</p>",
+                    createdAt: new Date().toISOString()
+                  },
+                  status: "approved"
+                }
+              })
+            })
+          }
+          if (url.includes("/api/comments")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  items: [],
+                  total: 0,
+                  page: 1,
+                  pageSize: 10,
+                  totalPages: 0
+                }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: {} })
+          })
+        })
+        window.fetch = fetchMock as unknown as typeof fetch
+
+        const widget = init({ el: "#caline", serverURL: "https://example.com" })
+        await widget.checkAuth()
+
+        const editorSlot = document.querySelector(".cl-editor-slot")!
+        const textarea = editorSlot.querySelector(".cl-textarea") as HTMLTextAreaElement
+        textarea.value = "Posting with my account"
+        textarea.dispatchEvent(new Event("input"))
+
+        const submitBtn = editorSlot.querySelector(
+          ".cl-btn-primary"
+        ) as HTMLButtonElement
+        submitBtn.click()
+
+        await vi.waitFor(() => {
+          expect(createCommentPayload).not.toBeNull()
+        })
+
+        expect(createCommentPayload).not.toBeNull()
+        expect(createCommentPayload).toEqual({
+          url: "/",
+          content: "Posting with my account"
+        })
+        // 确保未携带访客身份字段
+        expect(createCommentPayload).not.toHaveProperty("nick")
+        expect(createCommentPayload).not.toHaveProperty("mail")
+        expect(createCommentPayload).not.toHaveProperty("link")
+      })
+
+      it("renders logged-in reply editor with identity bar and submits without guest fields", async () => {
+        document.body.innerHTML = '<div id="caline"></div>'
+        let replyCommentPayload: Record<string, unknown> | null = null
+
+        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/api/auth/me")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ data: mockUser })
+            })
+          }
+          if (url.includes("/api/comments") && init?.method === "POST") {
+            replyCommentPayload = JSON.parse(init.body as string)
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  comment: {
+                    id: 100,
+                    url: "/",
+                    status: "approved",
+                    contentHtml: "<p>Reply comment</p>",
+                    createdAt: new Date().toISOString()
+                  },
+                  status: "approved"
+                }
+              })
+            })
+          }
+          if (url.includes("/api/comments")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  items: [
+                    {
+                      id: 1,
+                      url: "/",
+                      nick: "OriginalAuthor",
+                      avatar: "https://example.com/author.png",
+                      contentHtml: "<p>Original post</p>",
+                      createdAt: new Date().toISOString(),
+                      likes: 0,
+                      sticky: false
+                    }
+                  ],
+                  total: 1,
+                  page: 1,
+                  pageSize: 10,
+                  totalPages: 1
+                }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: {} })
+          })
+        })
+        window.fetch = fetchMock as unknown as typeof fetch
+
+        const widget = init({ el: "#caline", serverURL: "https://example.com" })
+        await widget.checkAuth()
+
+        // 触发回复
+        const replyTriggerBtn = document.querySelector(
+          ".cl-btn-reply"
+        ) as HTMLButtonElement
+        expect(replyTriggerBtn).not.toBeNull()
+        replyTriggerBtn.click()
+
+        // 回复编辑器挂载
+        const replySlot = document.querySelector(".cl-reply-editor-slot")
+        expect(replySlot).not.toBeNull()
+
+        // 验证回复编辑器同样呈现登录身份栏与退出按钮，且无访客三件套
+        expect(replySlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+        expect(replySlot?.querySelector(".cl-editor-avatar")).not.toBeNull()
+        expect(replySlot?.querySelector(".cl-editor-identity-notice")?.textContent).toBe(
+          "以 Alice 身份发表"
+        )
+        expect(replySlot?.querySelector(".cl-editor-meta-inputs")).toBeNull()
+
+        // 填写回复并发表
+        const replyTextarea = replySlot?.querySelector(".cl-textarea") as HTMLTextAreaElement
+        replyTextarea.value = "Replying as Alice"
+        replyTextarea.dispatchEvent(new Event("input"))
+
+        const replySubmitBtn = replySlot?.querySelector(".cl-btn-primary") as HTMLButtonElement
+        replySubmitBtn.click()
+
+        await vi.waitFor(() => {
+          expect(replyCommentPayload).not.toBeNull()
+        })
+
+        expect(replyCommentPayload).not.toBeNull()
+        expect(replyCommentPayload).toEqual({
+          url: "/",
+          content: "Replying as Alice",
+          pid: 1,
+          rid: 1
+        })
+        expect(replyCommentPayload).not.toHaveProperty("nick")
+        expect(replyCommentPayload).not.toHaveProperty("mail")
+        expect(replyCommentPayload).not.toHaveProperty("link")
       })
     })
   })

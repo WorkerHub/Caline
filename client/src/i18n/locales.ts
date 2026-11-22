@@ -41,6 +41,8 @@ export type LocaleKey =
   | "guest"
   | "admin"
   | "verified"
+  | "posting_as"
+  | "logout"
 
 export const zhCN: Record<LocaleKey, string> = {
   placeholder_nick: "昵称 *",
@@ -79,7 +81,9 @@ export const zhCN: Record<LocaleKey, string> = {
   pageview: "次浏览",
   guest: "访客",
   admin: "管理员",
-  verified: "已认证"
+  verified: "已认证",
+  posting_as: "以 {name} 身份发表",
+  logout: "退出登录"
 }
 
 export const enUS: Record<LocaleKey, string> = {
@@ -119,7 +123,9 @@ export const enUS: Record<LocaleKey, string> = {
   pageview: "Views",
   guest: "Guest",
   admin: "Admin",
-  verified: "Verified"
+  verified: "Verified",
+  posting_as: "Posting as {name}",
+  logout: "Sign out"
 }
 
 export type SupportedLang = "zh-CN" | "en"
@@ -142,7 +148,16 @@ export function resolveLanguage(customLang?: string): SupportedLang {
 
 export function createTranslator(lang: SupportedLang) {
   const dict = lang === "en" ? enUS : zhCN
-  return function t(key: LocaleKey): string {
-    return dict[key] ?? zhCN[key] ?? key
+  return function t(
+    key: LocaleKey,
+    params?: Record<string, string | number>
+  ): string {
+    let str = dict[key] ?? zhCN[key] ?? key
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        str = str.replace(new RegExp(`\\{${k}\\}`, "g"), String(v))
+      }
+    }
+    return str
   }
 }
