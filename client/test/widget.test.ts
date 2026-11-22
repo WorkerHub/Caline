@@ -633,7 +633,9 @@ Reply to @alice and @bob
         expect(identityBar).not.toBeNull()
 
         // 头像
-        const avatar = editor.querySelector(".cl-editor-avatar") as HTMLImageElement
+        const avatar = editor.querySelector(
+          ".cl-editor-avatar"
+        ) as HTMLImageElement
         expect(avatar).not.toBeNull()
         expect(avatar.src).toBe("https://example.com/alice.jpg")
         expect(avatar.alt).toBe("Alice")
@@ -642,10 +644,14 @@ Reply to @alice and @bob
         const notice = editor.querySelector(".cl-editor-identity-notice")
         expect(notice).not.toBeNull()
         expect(notice?.textContent).toBe("以 Alice 身份发表")
-        expect(editor.querySelector(".cl-editor-user-name")?.textContent).toBe("Alice")
+        expect(editor.querySelector(".cl-editor-user-name")?.textContent).toBe(
+          "Alice"
+        )
 
         // 退出登录按钮
-        const logoutBtn = editor.querySelector(".cl-editor-logout-btn") as HTMLButtonElement
+        const logoutBtn = editor.querySelector(
+          ".cl-editor-logout-btn"
+        ) as HTMLButtonElement
         expect(logoutBtn).not.toBeNull()
         expect(logoutBtn.textContent).toBe("退出登录")
 
@@ -688,7 +694,9 @@ Reply to @alice and @bob
           onSubmit: vi.fn()
         })
 
-        const avatar = editor.querySelector(".cl-editor-avatar") as HTMLImageElement
+        const avatar = editor.querySelector(
+          ".cl-editor-avatar"
+        ) as HTMLImageElement
         expect(avatar.src).toContain("data:image/svg+xml")
         const notice = editor.querySelector(".cl-editor-identity-notice")
         expect(notice?.textContent).toBe("以 charlie 身份发表")
@@ -705,11 +713,15 @@ Reply to @alice and @bob
           onSubmit
         })
 
-        const textarea = editor.querySelector(".cl-textarea") as HTMLTextAreaElement
+        const textarea = editor.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
         textarea.value = "Hello logged-in comment!"
         textarea.dispatchEvent(new Event("input"))
 
-        const submitBtn = editor.querySelector(".cl-btn-primary") as HTMLButtonElement
+        const submitBtn = editor.querySelector(
+          ".cl-btn-primary"
+        ) as HTMLButtonElement
         expect(submitBtn.disabled).toBe(false)
         submitBtn.click()
 
@@ -733,7 +745,9 @@ Reply to @alice and @bob
           onSubmit: vi.fn()
         })
 
-        const logoutBtn = editor.querySelector(".cl-editor-logout-btn") as HTMLButtonElement
+        const logoutBtn = editor.querySelector(
+          ".cl-editor-logout-btn"
+        ) as HTMLButtonElement
         logoutBtn.click()
 
         expect(onLogout).toHaveBeenCalled()
@@ -852,11 +866,13 @@ Reply to @alice and @bob
         await widget.checkAuth()
 
         const editorSlot = document.querySelector(".cl-editor-slot")
-        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+        expect(
+          editorSlot?.querySelector(".cl-editor-identity-bar")
+        ).not.toBeNull()
         expect(editorSlot?.querySelector(".cl-editor-avatar")).not.toBeNull()
-        expect(editorSlot?.querySelector(".cl-editor-identity-notice")?.textContent).toBe(
-          "以 Alice 身份发表"
-        )
+        expect(
+          editorSlot?.querySelector(".cl-editor-identity-notice")?.textContent
+        ).toBe("以 Alice 身份发表")
         expect(editorSlot?.querySelector(".cl-editor-meta-inputs")).toBeNull()
       })
 
@@ -911,7 +927,9 @@ Reply to @alice and @bob
 
         // 访客表单正常展现
         const editorSlot = document.querySelector(".cl-editor-slot")
-        expect(editorSlot?.querySelector(".cl-editor-meta-inputs")).not.toBeNull()
+        expect(
+          editorSlot?.querySelector(".cl-editor-meta-inputs")
+        ).not.toBeNull()
         expect(editorSlot?.querySelector(".cl-input-nick")).not.toBeNull()
         expect(editorSlot?.querySelector(".cl-editor-identity-bar")).toBeNull()
 
@@ -924,57 +942,63 @@ Reply to @alice and @bob
         document.body.innerHTML = '<div id="caline"></div>'
         let loggedIn = true
 
-        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-          if (url.includes("/api/auth/logout") && init?.method === "POST") {
-            loggedIn = false
-            return Promise.resolve({
-              ok: true,
-              status: 200,
-              json: async () => ({ success: true })
-            })
-          }
-          if (url.includes("/api/auth/me")) {
-            if (loggedIn) {
+        const fetchMock = vi
+          .fn()
+          .mockImplementation((url: string, init?: RequestInit) => {
+            if (url.includes("/api/auth/logout") && init?.method === "POST") {
+              loggedIn = false
               return Promise.resolve({
                 ok: true,
                 status: 200,
-                json: async () => ({ data: mockUser })
+                json: async () => ({ success: true })
+              })
+            }
+            if (url.includes("/api/auth/me")) {
+              if (loggedIn) {
+                return Promise.resolve({
+                  ok: true,
+                  status: 200,
+                  json: async () => ({ data: mockUser })
+                })
+              }
+              return Promise.resolve({
+                ok: false,
+                status: 401,
+                json: async () => ({
+                  error: { code: "UNAUTHORIZED", message: "Sign in required" }
+                })
+              })
+            }
+            if (url.includes("/api/comments")) {
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  data: {
+                    items: [],
+                    total: 0,
+                    page: 1,
+                    pageSize: 10,
+                    totalPages: 0
+                  }
+                })
               })
             }
             return Promise.resolve({
-              ok: false,
-              status: 401,
-              json: async () => ({ error: { code: "UNAUTHORIZED", message: "Sign in required" } })
-            })
-          }
-          if (url.includes("/api/comments")) {
-            return Promise.resolve({
               ok: true,
               status: 200,
-              json: async () => ({
-                data: {
-                  items: [],
-                  total: 0,
-                  page: 1,
-                  pageSize: 10,
-                  totalPages: 0
-                }
-              })
+              json: async () => ({ data: {} })
             })
-          }
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: async () => ({ data: {} })
           })
-        })
         window.fetch = fetchMock as unknown as typeof fetch
 
         const widget = init({ el: "#caline", serverURL: "https://example.com" })
         await widget.checkAuth()
 
         const editorSlot = document.querySelector(".cl-editor-slot")
-        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+        expect(
+          editorSlot?.querySelector(".cl-editor-identity-bar")
+        ).not.toBeNull()
 
         // 点击退出登录
         const logoutBtn = editorSlot?.querySelector(
@@ -995,9 +1019,13 @@ Reply to @alice and @bob
 
         // 验证无需刷新页面，主发表框无缝切回访客模式
         expect(editorSlot?.querySelector(".cl-editor-identity-bar")).toBeNull()
-        expect(editorSlot?.querySelector(".cl-editor-meta-inputs")).not.toBeNull()
+        expect(
+          editorSlot?.querySelector(".cl-editor-meta-inputs")
+        ).not.toBeNull()
         expect(editorSlot?.querySelector(".cl-input-nick")).not.toBeNull()
-        expect(editorSlot?.querySelector(".cl-editor-login-prompt")).not.toBeNull()
+        expect(
+          editorSlot?.querySelector(".cl-editor-login-prompt")
+        ).not.toBeNull()
       })
 
       it("keeps logged-in state and alerts error when logout request fails", async () => {
@@ -1044,7 +1072,9 @@ Reply to @alice and @bob
         await widget.checkAuth()
 
         const editorSlot = document.querySelector(".cl-editor-slot")
-        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+        expect(
+          editorSlot?.querySelector(".cl-editor-identity-bar")
+        ).not.toBeNull()
 
         // 点击退出登录
         const logoutBtn = editorSlot?.querySelector(
@@ -1059,7 +1089,9 @@ Reply to @alice and @bob
 
         // 验证失败后未脱离登录态，仍保持登录 UI，未展示访客表单
         expect(widget.user).toEqual(mockUser)
-        expect(editorSlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+        expect(
+          editorSlot?.querySelector(".cl-editor-identity-bar")
+        ).not.toBeNull()
         expect(editorSlot?.querySelector(".cl-editor-meta-inputs")).toBeNull()
         expect(logoutBtn.disabled).toBe(false)
       })
@@ -1068,61 +1100,65 @@ Reply to @alice and @bob
         document.body.innerHTML = '<div id="caline"></div>'
         let createCommentPayload: Record<string, unknown> | null = null
 
-        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-          if (url.includes("/api/auth/me")) {
-            return Promise.resolve({
-              ok: true,
-              status: 200,
-              json: async () => ({ data: mockUser })
-            })
-          }
-          if (url.includes("/api/comments") && init?.method === "POST") {
-            createCommentPayload = JSON.parse(init.body as string)
-            return Promise.resolve({
-              ok: true,
-              status: 200,
-              json: async () => ({
-                data: {
-                  comment: {
-                    id: 99,
-                    url: "/",
-                    status: "approved",
-                    contentHtml: "<p>Logged in comment</p>",
-                    createdAt: new Date().toISOString()
-                  },
-                  status: "approved"
-                }
+        const fetchMock = vi
+          .fn()
+          .mockImplementation((url: string, init?: RequestInit) => {
+            if (url.includes("/api/auth/me")) {
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({ data: mockUser })
               })
-            })
-          }
-          if (url.includes("/api/comments")) {
+            }
+            if (url.includes("/api/comments") && init?.method === "POST") {
+              createCommentPayload = JSON.parse(init.body as string)
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  data: {
+                    comment: {
+                      id: 99,
+                      url: "/",
+                      status: "approved",
+                      contentHtml: "<p>Logged in comment</p>",
+                      createdAt: new Date().toISOString()
+                    },
+                    status: "approved"
+                  }
+                })
+              })
+            }
+            if (url.includes("/api/comments")) {
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  data: {
+                    items: [],
+                    total: 0,
+                    page: 1,
+                    pageSize: 10,
+                    totalPages: 0
+                  }
+                })
+              })
+            }
             return Promise.resolve({
               ok: true,
               status: 200,
-              json: async () => ({
-                data: {
-                  items: [],
-                  total: 0,
-                  page: 1,
-                  pageSize: 10,
-                  totalPages: 0
-                }
-              })
+              json: async () => ({ data: {} })
             })
-          }
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: async () => ({ data: {} })
           })
-        })
         window.fetch = fetchMock as unknown as typeof fetch
 
         const widget = init({ el: "#caline", serverURL: "https://example.com" })
         await widget.checkAuth()
 
         const editorSlot = document.querySelector(".cl-editor-slot")!
-        const textarea = editorSlot.querySelector(".cl-textarea") as HTMLTextAreaElement
+        const textarea = editorSlot.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
         textarea.value = "Posting with my account"
         textarea.dispatchEvent(new Event("input"))
 
@@ -1150,65 +1186,67 @@ Reply to @alice and @bob
         document.body.innerHTML = '<div id="caline"></div>'
         let replyCommentPayload: Record<string, unknown> | null = null
 
-        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-          if (url.includes("/api/auth/me")) {
-            return Promise.resolve({
-              ok: true,
-              status: 200,
-              json: async () => ({ data: mockUser })
-            })
-          }
-          if (url.includes("/api/comments") && init?.method === "POST") {
-            replyCommentPayload = JSON.parse(init.body as string)
-            return Promise.resolve({
-              ok: true,
-              status: 200,
-              json: async () => ({
-                data: {
-                  comment: {
-                    id: 100,
-                    url: "/",
-                    status: "approved",
-                    contentHtml: "<p>Reply comment</p>",
-                    createdAt: new Date().toISOString()
-                  },
-                  status: "approved"
-                }
+        const fetchMock = vi
+          .fn()
+          .mockImplementation((url: string, init?: RequestInit) => {
+            if (url.includes("/api/auth/me")) {
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({ data: mockUser })
               })
-            })
-          }
-          if (url.includes("/api/comments")) {
-            return Promise.resolve({
-              ok: true,
-              status: 200,
-              json: async () => ({
-                data: {
-                  items: [
-                    {
-                      id: 1,
+            }
+            if (url.includes("/api/comments") && init?.method === "POST") {
+              replyCommentPayload = JSON.parse(init.body as string)
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  data: {
+                    comment: {
+                      id: 100,
                       url: "/",
-                      nick: "OriginalAuthor",
-                      avatar: "https://example.com/author.png",
-                      contentHtml: "<p>Original post</p>",
-                      createdAt: new Date().toISOString(),
-                      likes: 0,
-                      sticky: false
-                    }
-                  ],
-                  total: 1,
-                  page: 1,
-                  pageSize: 10,
-                  totalPages: 1
-                }
+                      status: "approved",
+                      contentHtml: "<p>Reply comment</p>",
+                      createdAt: new Date().toISOString()
+                    },
+                    status: "approved"
+                  }
+                })
               })
+            }
+            if (url.includes("/api/comments")) {
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  data: {
+                    items: [
+                      {
+                        id: 1,
+                        url: "/",
+                        nick: "OriginalAuthor",
+                        avatar: "https://example.com/author.png",
+                        contentHtml: "<p>Original post</p>",
+                        createdAt: new Date().toISOString(),
+                        likes: 0,
+                        sticky: false
+                      }
+                    ],
+                    total: 1,
+                    page: 1,
+                    pageSize: 10,
+                    totalPages: 1
+                  }
+                })
+              })
+            }
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ data: {} })
             })
-          }
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: async () => ({ data: {} })
           })
-        })
         window.fetch = fetchMock as unknown as typeof fetch
 
         const widget = init({ el: "#caline", serverURL: "https://example.com" })
@@ -1226,19 +1264,25 @@ Reply to @alice and @bob
         expect(replySlot).not.toBeNull()
 
         // 验证回复编辑器同样呈现登录身份栏与退出按钮，且无访客三件套
-        expect(replySlot?.querySelector(".cl-editor-identity-bar")).not.toBeNull()
+        expect(
+          replySlot?.querySelector(".cl-editor-identity-bar")
+        ).not.toBeNull()
         expect(replySlot?.querySelector(".cl-editor-avatar")).not.toBeNull()
-        expect(replySlot?.querySelector(".cl-editor-identity-notice")?.textContent).toBe(
-          "以 Alice 身份发表"
-        )
+        expect(
+          replySlot?.querySelector(".cl-editor-identity-notice")?.textContent
+        ).toBe("以 Alice 身份发表")
         expect(replySlot?.querySelector(".cl-editor-meta-inputs")).toBeNull()
 
         // 填写回复并发表
-        const replyTextarea = replySlot?.querySelector(".cl-textarea") as HTMLTextAreaElement
+        const replyTextarea = replySlot?.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
         replyTextarea.value = "Replying as Alice"
         replyTextarea.dispatchEvent(new Event("input"))
 
-        const replySubmitBtn = replySlot?.querySelector(".cl-btn-primary") as HTMLButtonElement
+        const replySubmitBtn = replySlot?.querySelector(
+          ".cl-btn-primary"
+        ) as HTMLButtonElement
         replySubmitBtn.click()
 
         await vi.waitFor(() => {
