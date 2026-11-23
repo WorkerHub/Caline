@@ -240,6 +240,12 @@
 
   "profile": {
     "title": "个人资料",
+    "avatar": "头像",
+    "selectAvatar": "选择图片",
+    "avatarPreview": "头像预览",
+    "avatarSaved": "头像已更新",
+    "avatarUploadFailed": "头像上传失败",
+    "uploading": "上传中...",
     "displayName": "昵称",
     "email": "邮箱",
     "emailVerified": "已验证",

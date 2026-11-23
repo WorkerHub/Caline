@@ -13,7 +13,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     meApi: {
       ...actual.meApi,
-      update: vi.fn()
+      update: vi.fn(),
+      uploadAvatar: vi.fn()
     }
   }
 })
@@ -21,6 +22,9 @@ vi.mock("@/lib/api", async (importOriginal) => {
 beforeEach(() => {
   useAuthStore.setState({ user: me(), status: "ready" })
   vi.mocked(meApi.update).mockResolvedValue(me())
+  vi.mocked(meApi.uploadAvatar).mockResolvedValue({
+    avatar: "https://example.com/new-avatar.png"
+  })
 })
 
 describe("个人资料页", () => {
@@ -132,5 +136,91 @@ describe("个人资料页", () => {
     await waitFor(() =>
       expect(screen.queryByLabelText("昵称")).not.toBeInTheDocument()
     )
+  })
+})
+
+describe("个人设置页头像 UI", () => {
+  it("展示选择图片按钮，未选择图片时不展示保存/取消按钮", () => {
+    render(<ProfilePage />)
+    expect(screen.getByRole("button", { name: "选择图片" })).toBeInTheDocument()
+    expect(screen.queryByTestId("avatar-preview-img")).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "保存" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("选择图片后即时展示预览图与保存、取消按钮", async () => {
+    const user = userEvent.setup()
+    render(<ProfilePage />)
+
+    const file = new File(["dummy content"], "avatar.png", {
+      type: "image/png"
+    })
+    const input = screen.getByLabelText("选择图片")
+    await user.upload(input, file)
+
+    expect(await screen.findByTestId("avatar-preview-img")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "取消" })).toBeInTheDocument()
+  })
+
+  it("点击保存调用 POST /api/me/avatar 接口并更新头像", async () => {
+    const user = userEvent.setup()
+    render(<ProfilePage />)
+
+    const file = new File(["dummy content"], "avatar.png", {
+      type: "image/png"
+    })
+    const input = screen.getByLabelText("选择图片")
+    await user.upload(input, file)
+
+    const saveBtn = screen.getByRole("button", { name: "保存" })
+    await user.click(saveBtn)
+
+    await waitFor(() => expect(meApi.uploadAvatar).toHaveBeenCalledWith(file))
+    await waitFor(() =>
+      expect(screen.queryByTestId("avatar-preview-img")).not.toBeInTheDocument()
+    )
+  })
+
+  it("上传失败时就地显示错误提示（role=alert）", async () => {
+    vi.mocked(meApi.uploadAvatar).mockRejectedValueOnce(
+      new ApiError({
+        status: 400,
+        message: "Invalid image format"
+      })
+    )
+    const user = userEvent.setup()
+    render(<ProfilePage />)
+
+    const file = new File(["bad content"], "avatar.bad", { type: "image/png" })
+    const input = screen.getByLabelText("选择图片")
+    await user.upload(input, file)
+
+    const saveBtn = screen.getByRole("button", { name: "保存" })
+    await user.click(saveBtn)
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument()
+  })
+
+  it("点击取消放弃预览并清空选择", async () => {
+    const user = userEvent.setup()
+    render(<ProfilePage />)
+
+    const file = new File(["dummy content"], "avatar.png", {
+      type: "image/png"
+    })
+    const input = screen.getByLabelText("选择图片")
+    await user.upload(input, file)
+
+    expect(await screen.findByTestId("avatar-preview-img")).toBeInTheDocument()
+    const cancelBtn = screen.getByRole("button", { name: "取消" })
+    await user.click(cancelBtn)
+
+    expect(screen.queryByTestId("avatar-preview-img")).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "保存" })
+    ).not.toBeInTheDocument()
+    expect(meApi.uploadAvatar).not.toHaveBeenCalled()
   })
 })

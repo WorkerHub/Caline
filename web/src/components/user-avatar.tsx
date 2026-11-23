@@ -1,9 +1,9 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import type { Me } from "@/lib/api-types"
 import { accountInitial } from "@/lib/user-identity"
 
 type UserAvatarProps = {
-  user: Pick<Me, "displayName" | "email"> | null
+  user: (Pick<Me, "displayName" | "email"> & { avatar?: string }) | null
   className?: string
 }
 
@@ -11,6 +11,12 @@ type UserAvatarProps = {
 export function UserAvatar({ user, className }: UserAvatarProps) {
   return (
     <Avatar className={className}>
+      {user?.avatar ? (
+        <AvatarImage
+          src={user.avatar}
+          alt={user.displayName || user.email || ""}
+        />
+      ) : null}
       <AvatarFallback className="bg-muted text-xs font-medium text-foreground">
         {accountInitial(user)}
       </AvatarFallback>

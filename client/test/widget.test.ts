@@ -2293,4 +2293,154 @@ Reply to @alice and @bob
       })
     })
   })
+
+  describe("Comment tree badges (管理员标记与国际化)", () => {
+    const sampleDate = new Date().toISOString()
+
+    it("renders '管理员' for admin badge in zh-CN (root and reply)", () => {
+      const tZh = createTranslator("zh-CN")
+      const tree = renderCommentTree({
+        items: [
+          {
+            id: 1,
+            userId: 1,
+            nick: "AdminUser",
+            avatar: "avatar.png",
+            link: "",
+            url: "/p/1",
+            contentHtml: "<p>Admin post</p>",
+            sticky: false,
+            likeCount: 0,
+            createdAt: sampleDate,
+            updatedAt: sampleDate,
+            badge: "admin",
+            replies: [
+              {
+                id: 2,
+                pid: 1,
+                rid: 1,
+                userId: 2,
+                nick: "AdminReply",
+                avatar: "avatar2.png",
+                link: "",
+                url: "/p/1",
+                contentHtml: "<p>Admin reply</p>",
+                likeCount: 0,
+                createdAt: sampleDate,
+                updatedAt: sampleDate,
+                badge: "admin",
+                replyTo: null
+              }
+            ]
+          }
+        ],
+        t: tZh,
+        onReply: vi.fn(),
+        onLike: vi.fn(),
+        onUpdate: vi.fn(),
+        onDelete: vi.fn()
+      })
+
+      const badges = tree.querySelectorAll(".cl-badge")
+      expect(badges.length).toBe(2)
+      expect(badges[0].textContent).toBe("管理员")
+      expect(badges[1].textContent).toBe("管理员")
+    })
+
+    it("renders 'Administrator' for admin badge in en (root and reply)", () => {
+      const tEn = createTranslator("en")
+      const tree = renderCommentTree({
+        items: [
+          {
+            id: 1,
+            userId: 1,
+            nick: "AdminUser",
+            avatar: "avatar.png",
+            link: "",
+            url: "/p/1",
+            contentHtml: "<p>Admin post</p>",
+            sticky: false,
+            likeCount: 0,
+            createdAt: sampleDate,
+            updatedAt: sampleDate,
+            badge: "admin",
+            replies: [
+              {
+                id: 2,
+                pid: 1,
+                rid: 1,
+                userId: 2,
+                nick: "AdminReply",
+                avatar: "avatar2.png",
+                link: "",
+                url: "/p/1",
+                contentHtml: "<p>Admin reply</p>",
+                likeCount: 0,
+                createdAt: sampleDate,
+                updatedAt: sampleDate,
+                badge: "admin",
+                replyTo: null
+              }
+            ]
+          }
+        ],
+        t: tEn,
+        onReply: vi.fn(),
+        onLike: vi.fn(),
+        onUpdate: vi.fn(),
+        onDelete: vi.fn()
+      })
+
+      const badges = tree.querySelectorAll(".cl-badge")
+      expect(badges.length).toBe(2)
+      expect(badges[0].textContent).toBe("Administrator")
+      expect(badges[1].textContent).toBe("Administrator")
+    })
+
+    it("does not render badge when badge is absent or undefined", () => {
+      const tZh = createTranslator("zh-CN")
+      const tree = renderCommentTree({
+        items: [
+          {
+            id: 1,
+            userId: 1,
+            nick: "GuestUser",
+            avatar: "avatar.png",
+            link: "",
+            url: "/p/1",
+            contentHtml: "<p>Guest post</p>",
+            sticky: false,
+            likeCount: 0,
+            createdAt: sampleDate,
+            updatedAt: sampleDate,
+            replies: [
+              {
+                id: 2,
+                pid: 1,
+                rid: 1,
+                userId: 2,
+                nick: "GuestReply",
+                avatar: "avatar2.png",
+                link: "",
+                url: "/p/1",
+                contentHtml: "<p>Guest reply</p>",
+                likeCount: 0,
+                createdAt: sampleDate,
+                updatedAt: sampleDate,
+                replyTo: null
+              }
+            ]
+          }
+        ],
+        t: tZh,
+        onReply: vi.fn(),
+        onLike: vi.fn(),
+        onUpdate: vi.fn(),
+        onDelete: vi.fn()
+      })
+
+      const badges = tree.querySelectorAll(".cl-badge")
+      expect(badges.length).toBe(0)
+    })
+  })
 })
