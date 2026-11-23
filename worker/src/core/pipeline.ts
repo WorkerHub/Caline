@@ -17,6 +17,7 @@ import rehypeHighlight from "rehype-highlight"
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize"
 import rehypeStringify from "rehype-stringify"
 import type { CommentStatus } from "@caline/shared"
+import { EMOJI_MANIFESTS } from "../data/emojis"
 
 // 扩展 GitHub 默认 schema，放行 hljs 与 language-* 类名，并放行 img 及其属性（alt, title, src），协议严格限 http(s)
 const SANITIZE_SCHEMA = {
@@ -44,12 +45,87 @@ const SANITIZE_SCHEMA = {
   }
 }
 
+const KNOWN_EMOJI_GROUPS = Object.keys(EMOJI_MANIFESTS)
+// 短码语法：:<group>_<key>:，先按已知 group 前缀匹配，其余整体作 key
+const SHORTCODE_REGEX = new RegExp(
+  `:(${KNOWN_EMOJI_GROUPS.join("|")})_([^:\\s]+):`,
+  "g"
+)
+
+/** remark 插件：在 mdast 文本节点层替换表情短码为 image 节点 */
+export function remarkEmojiShortcode(options: { baseUrl?: string } = {}) {
+  const cleanBase = (options.baseUrl || "").trim().replace(/\/+$/, "")
+
+  return (tree: any) => {
+    function walk(node: any) {
+      if (!node || !Array.isArray(node.children)) return
+      // 代码块与行内代码节点本身无 children（属于 Literal），此处显式防护
+      if (node.type === "code" || node.type === "inlineCode") return
+
+      const newChildren: any[] = []
+      for (const child of node.children) {
+        if (child.type === "text") {
+          const text: string = child.value
+          let lastIndex = 0
+          const pieces: any[] = []
+
+          for (const match of text.matchAll(SHORTCODE_REGEX)) {
+            const [fullMatch, group, key] = match
+            const manifest = EMOJI_MANIFESTS[group]
+            const matchIndex = match.index ?? 0
+            if (
+              manifest &&
+              Object.hasOwn(manifest, key) &&
+              matchIndex >= lastIndex
+            ) {
+              if (matchIndex > lastIndex) {
+                pieces.push({
+                  type: "text",
+                  value: text.slice(lastIndex, matchIndex)
+                })
+              }
+              const filename = manifest[key]
+              const url = `${cleanBase}/emoji/${group}/${filename}`
+              pieces.push({
+                type: "image",
+                url,
+                alt: fullMatch
+              })
+              lastIndex = matchIndex + fullMatch.length
+            }
+          }
+
+          if (pieces.length > 0) {
+            if (lastIndex < text.length) {
+              pieces.push({
+                type: "text",
+                value: text.slice(lastIndex)
+              })
+            }
+            newChildren.push(...pieces)
+          } else {
+            newChildren.push(child)
+          }
+        } else {
+          walk(child)
+          newChildren.push(child)
+        }
+      }
+      node.children = newChildren
+    }
+
+    walk(tree)
+  }
+}
+
 /** 统一 Markdown 渲染与清洗处理链（纯 ESM、原生无 jsdom 依赖） */
 export async function renderAndSanitizeMarkdown(
-  markdown: string
+  markdown: string,
+  baseUrl?: string
 ): Promise<string> {
   const result = await unified()
     .use(remarkParse)
+    .use(remarkEmojiShortcode, { baseUrl })
     .use(remarkRehype, { allowDangerousHtml: false })
     .use(rehypeHighlight)
     .use(rehypeSanitize as any, SANITIZE_SCHEMA)
