@@ -10,12 +10,11 @@ export const emojiRoutes = new Hono<HonoEnv>()
 
 emojiRoutes.get("/:group/manifest.json", (c) => {
   const group = c.req.param("group")
-  const manifest = EMOJI_MANIFESTS[group]
-
-  if (!manifest) {
+  if (!Object.hasOwn(EMOJI_MANIFESTS, group)) {
     return c.json({ error: "Emoji group not found" }, 404)
   }
 
+  const manifest = EMOJI_MANIFESTS[group]
   c.header("Cache-Control", "public, max-age=31536000, immutable")
   c.header("Access-Control-Allow-Origin", "*")
   return c.json(manifest)

@@ -183,7 +183,17 @@ uploadRoutes.post("/", async (c) => {
     })
   }
 
-  // 2. 解析 multipart/form-data
+  // 2. 早期 Content-Length 头校验（低成本拦截大请求，防止内存放大）
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+  const contentLength = c.req.header("content-length")
+  if (contentLength) {
+    const parsedLength = Number.parseInt(contentLength, 10)
+    if (!Number.isNaN(parsedLength) && parsedLength > MAX_FILE_SIZE) {
+      return calineError(c, 400, "FILE_TOO_LARGE", getMsg("FILE_TOO_LARGE"))
+    }
+  }
+
+  // 3. 解析 multipart/form-data
   let formData: FormData
   try {
     formData = await c.req.formData()
@@ -191,7 +201,7 @@ uploadRoutes.post("/", async (c) => {
     return calineError(c, 400, "INVALID_REQUEST", getMsg("INVALID_REQUEST"))
   }
 
-  // 3. 鉴权态判定（登录会话免 Turnstile，访客须验 Turnstile）
+  // 4. 鉴权态判定（登录会话免 Turnstile，访客须验 Turnstile）
   const token = readSessionToken(c)
   const session = token ? await findSession(c.env.DB, prefix, token) : null
   const isLoggedIn = Boolean(session)
@@ -233,14 +243,16 @@ uploadRoutes.post("/", async (c) => {
     }
   }
 
-  // 4. 文件提取与校验
+  // 5. 文件提取与校验
   const file = formData.get("file")
   if (!file || typeof file === "string" || !(file instanceof File)) {
     return calineError(c, 400, "FILE_REQUIRED", getMsg("FILE_REQUIRED"))
   }
 
-  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-  if (file.size === 0 || file.size > MAX_FILE_SIZE) {
+  if (file.size === 0) {
+    return calineError(c, 400, "FILE_REQUIRED", getMsg("FILE_REQUIRED"))
+  }
+  if (file.size > MAX_FILE_SIZE) {
     return calineError(c, 400, "FILE_TOO_LARGE", getMsg("FILE_TOO_LARGE"))
   }
 

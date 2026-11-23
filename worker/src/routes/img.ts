@@ -19,9 +19,37 @@ function getMimeTypeByExt(key: string): string {
   return "application/octet-stream"
 }
 
+function cleanEtag(etag: string): string {
+  let cleaned = etag.trim()
+  if (cleaned.startsWith("W/") || cleaned.startsWith("w/")) {
+    cleaned = cleaned.slice(2).trim()
+  }
+  if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+    cleaned = cleaned.slice(1, -1)
+  }
+  return cleaned
+}
+
+function matchesIfNoneMatch(ifNoneMatchHeader: string, etag: string): boolean {
+  const target = cleanEtag(etag)
+  if (!target) return false
+  const candidates = ifNoneMatchHeader.split(",").map((s) => s.trim())
+  for (const candidate of candidates) {
+    if (candidate === "*") return true
+    if (cleanEtag(candidate) === target) return true
+  }
+  return false
+}
+
 imgRoutes.get("/*", async (c) => {
   const rawPath = c.req.path
-  const key = decodeURIComponent(rawPath.replace(/^\/img\/?/, ""))
+  let key: string
+  try {
+    key = decodeURIComponent(rawPath.replace(/^\/img\/?/, ""))
+  } catch {
+    return c.text("Not Found", 404)
+  }
+
   if (!key || key.includes("..")) {
     return c.text("Not Found", 404)
   }
@@ -44,8 +72,11 @@ imgRoutes.get("/*", async (c) => {
 
   if (object.httpEtag) {
     headers.set("ETag", object.httpEtag)
-    const clientEtag = c.req.header("if-none-match")
-    if (clientEtag && clientEtag === object.httpEtag) {
+    const clientIfNoneMatch = c.req.header("if-none-match")
+    if (
+      clientIfNoneMatch &&
+      matchesIfNoneMatch(clientIfNoneMatch, object.httpEtag)
+    ) {
       return new Response(null, { status: 304, headers })
     }
   }

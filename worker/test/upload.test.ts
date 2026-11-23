@@ -93,10 +93,23 @@ describe("R2 Image Upload & Public Serving", () => {
       // ETag 304 缓存重用
       const etag = imgRes.headers.get("ETag")
       if (etag) {
+        // 精确匹配
         const cachedRes = await request(ctx.env, body.data.url, {
           headers: { "If-None-Match": etag }
         })
         expect(cachedRes.status).toBe(304)
+
+        // 弱校验 W/ 前缀匹配
+        const weakCachedRes = await request(ctx.env, body.data.url, {
+          headers: { "If-None-Match": `W/${etag}` }
+        })
+        expect(weakCachedRes.status).toBe(304)
+
+        // 逗号分隔列表匹配
+        const multiCachedRes = await request(ctx.env, body.data.url, {
+          headers: { "If-None-Match": `"other-etag", ${etag}` }
+        })
+        expect(multiCachedRes.status).toBe(304)
       }
     })
 
@@ -138,15 +151,22 @@ describe("R2 Image Upload & Public Serving", () => {
       expect(dataWebp.data.url).toMatch(/\.webp$/)
     })
 
-    it("returns 404 for nonexistent or path traversal images", async () => {
+    it("returns 404 for nonexistent, path traversal, or malformed percent-encoded images", async () => {
       const res404 = await request(ctx.env, "/img/2026/01/01/not-found.png")
       expect(res404.status).toBe(404)
 
       const resTraversal = await request(ctx.env, "/img/../secret.png")
       expect(resTraversal.status).toBe(404)
+
+      // 畸形百分号编码不会导致 500 异常崩溃，如实回 404
+      const resPercent = await request(ctx.env, "/img/%")
+      expect(resPercent.status).toBe(404)
+
+      const resMalformed = await request(ctx.env, "/img/%zz")
+      expect(resMalformed.status).toBe(404)
     })
 
-    it("rejects request without file field", async () => {
+    it("rejects request without file field or empty file", async () => {
       const formData = new FormData()
       formData.append("other", "field")
 
@@ -156,17 +176,43 @@ describe("R2 Image Upload & Public Serving", () => {
         error: { code: string; message: string }
       }
       expect(body.error.code).toBe("FILE_REQUIRED")
+
+      // 空文件 (0 字节) 给出明确的 FILE_REQUIRED
+      const fdEmpty = new FormData()
+      fdEmpty.append("file", new Blob([], { type: "image/png" }), "empty.png")
+      const resEmpty = await makeUploadRequest(fdEmpty)
+      expect(resEmpty.status).toBe(400)
+      const bodyEmpty = (await resEmpty.json()) as {
+        error: { code: string; message: string }
+      }
+      expect(bodyEmpty.error.code).toBe("FILE_REQUIRED")
     })
 
-    it("rejects files larger than 10MB", async () => {
+    it("rejects files larger than 10MB via Content-Length or actual size", async () => {
+      // 早期 Content-Length 检查拦截
       const formData = new FormData()
-      // 模拟超过 10MB 的大文件
+      formData.append(
+        "file",
+        new Blob([PNG_BYTES], { type: "image/png" }),
+        "small.png"
+      )
+      const resEarly = await makeUploadRequest(formData, {
+        headers: { "Content-Length": "10485761" }
+      })
+      expect(resEarly.status).toBe(400)
+      const bodyEarly = (await resEarly.json()) as {
+        error: { code: string; message: string }
+      }
+      expect(bodyEarly.error.code).toBe("FILE_TOO_LARGE")
+
+      // 实际 payload 超过 10MB 的大文件
       const oversized = new Blob([new Uint8Array(10 * 1024 * 1024 + 1)], {
         type: "image/png"
       })
-      formData.append("file", oversized, "large.png")
+      const fdOversized = new FormData()
+      fdOversized.append("file", oversized, "large.png")
 
-      const res = await makeUploadRequest(formData)
+      const res = await makeUploadRequest(fdOversized)
       expect(res.status).toBe(400)
       const body = (await res.json()) as {
         error: { code: string; message: string }
@@ -327,15 +373,22 @@ describe("R2 Image Upload & Public Serving", () => {
       expect(bodyNoToken.error.code).toBe("TURNSTILE_REQUIRED")
 
       // 访客提供无效 token
-      const originalFetch = globalThis.fetch
-      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
-        if (url.includes("challenges.cloudflare.com")) {
-          return new Response(JSON.stringify({ success: false }), {
-            status: 200
-          })
+      vi.spyOn(globalThis, "fetch").mockImplementation(
+        async (input: RequestInfo | URL) => {
+          const url =
+            typeof input === "string"
+              ? input
+              : input instanceof URL
+                ? input.toString()
+                : input.url
+          if (url.includes("challenges.cloudflare.com")) {
+            return new Response(JSON.stringify({ success: false }), {
+              status: 200
+            })
+          }
+          return new Response("Not Found", { status: 404 })
         }
-        return originalFetch(url)
-      })
+      )
 
       const fdBadToken = new FormData()
       fdBadToken.append(
@@ -352,14 +405,22 @@ describe("R2 Image Upload & Public Serving", () => {
       expect(bodyBadToken.error.code).toBe("TURNSTILE_FAILED")
 
       // 访客提供有效 token
-      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
-        if (url.includes("challenges.cloudflare.com")) {
-          return new Response(JSON.stringify({ success: true }), {
-            status: 200
-          })
+      vi.spyOn(globalThis, "fetch").mockImplementation(
+        async (input: RequestInfo | URL) => {
+          const url =
+            typeof input === "string"
+              ? input
+              : input instanceof URL
+                ? input.toString()
+                : input.url
+          if (url.includes("challenges.cloudflare.com")) {
+            return new Response(JSON.stringify({ success: true }), {
+              status: 200
+            })
+          }
+          return new Response("Not Found", { status: 404 })
         }
-        return originalFetch(url)
-      })
+      )
 
       const fdGoodToken = new FormData()
       fdGoodToken.append(
