@@ -49,4 +49,10 @@ describe("Markdown Pipeline Sanitize: Image Support & Security", () => {
     expect(html).not.toContain("onerror")
     expect(html).not.toContain("alert")
   })
+
+  it("preserves cl- prefixed classes on img while rejecting other class names", async () => {
+    const md = "![Sticker](/emoji/qq/smile.gif)"
+    const html = await renderAndSanitizeMarkdown(md)
+    expect(html).toContain('class="cl-emoji-sticker"')
+  })
 })

@@ -143,22 +143,22 @@ describe("Server-side Emoji Shortcode Rendering Pipeline", () => {
       "QQ :qq_smile: and :qq_1:, Weibo :weibo_doge:, Bilibili :bilibili_doge:, Douyin :douyin_18jin: and :douyin_吉吉国王_emoji:"
     const html = await renderAndSanitizeMarkdown(input, baseUrl)
     expect(html).toContain(
-      '<img src="https://example.com/emoji/qq/qq_smile.gif" alt=":qq_smile:">'
+      '<img src="https://example.com/emoji/qq/qq_smile.gif" alt=":qq_smile:" class="cl-emoji-sticker">'
     )
     expect(html).toContain(
-      '<img src="https://example.com/emoji/qq/qq_1.gif" alt=":qq_1:">'
+      '<img src="https://example.com/emoji/qq/qq_1.gif" alt=":qq_1:" class="cl-emoji-sticker">'
     )
     expect(html).toContain(
-      '<img src="https://example.com/emoji/weibo/weibo_doge.png" alt=":weibo_doge:">'
+      '<img src="https://example.com/emoji/weibo/weibo_doge.png" alt=":weibo_doge:" class="cl-emoji-sticker">'
     )
     expect(html).toContain(
-      '<img src="https://example.com/emoji/bilibili/bb_doge.png" alt=":bilibili_doge:">'
+      '<img src="https://example.com/emoji/bilibili/bb_doge.png" alt=":bilibili_doge:" class="cl-emoji-sticker">'
     )
     expect(html).toContain(
-      '<img src="https://example.com/emoji/douyin/18jin.png" alt=":douyin_18jin:">'
+      '<img src="https://example.com/emoji/douyin/18jin.png" alt=":douyin_18jin:" class="cl-emoji-sticker">'
     )
     expect(html).toContain(
-      '<img src="https://example.com/emoji/douyin/%E5%90%89%E5%90%89%E5%9B%BD%E7%8E%8B_emoji.png" alt=":douyin_吉吉国王_emoji:">'
+      '<img src="https://example.com/emoji/douyin/%E5%90%89%E5%90%89%E5%9B%BD%E7%8E%8B_emoji.png" alt=":douyin_吉吉国王_emoji:" class="cl-emoji-sticker">'
     )
   })
 
@@ -195,13 +195,13 @@ describe("Server-side Emoji Shortcode Rendering Pipeline", () => {
       ":qq_smile::qq_1: and ![custom](https://img.example.com/pic.png) and [link :weibo_doge:](https://example.com)"
     const html = await renderAndSanitizeMarkdown(input, baseUrl)
     expect(html).toContain(
-      '<img src="https://example.com/emoji/qq/qq_smile.gif" alt=":qq_smile:"><img src="https://example.com/emoji/qq/qq_1.gif" alt=":qq_1:">'
+      '<img src="https://example.com/emoji/qq/qq_smile.gif" alt=":qq_smile:" class="cl-emoji-sticker"><img src="https://example.com/emoji/qq/qq_1.gif" alt=":qq_1:" class="cl-emoji-sticker">'
     )
     expect(html).toContain(
       '<img src="https://img.example.com/pic.png" alt="custom">'
     )
     expect(html).toContain(
-      '<a href="https://example.com">link <img src="https://example.com/emoji/weibo/weibo_doge.png" alt=":weibo_doge:"></a>'
+      '<a href="https://example.com">link <img src="https://example.com/emoji/weibo/weibo_doge.png" alt=":weibo_doge:" class="cl-emoji-sticker"></a>'
     )
   })
 
@@ -209,7 +209,7 @@ describe("Server-side Emoji Shortcode Rendering Pipeline", () => {
     const input = "No base: :qq_smile:"
     const html = await renderAndSanitizeMarkdown(input)
     expect(html).toContain(
-      '<img src="/emoji/qq/qq_smile.gif" alt=":qq_smile:">'
+      '<img src="/emoji/qq/qq_smile.gif" alt=":qq_smile:" class="cl-emoji-sticker">'
     )
   })
 
@@ -230,15 +230,110 @@ describe("Server-side Emoji Shortcode Rendering Pipeline", () => {
     expect(createRes.status).toBe(201)
     const body = (await createRes.json()) as { data: CreateCommentResult }
     expect(body.data.comment.contentHtml).toContain(
-      '<img src="http://worker.test/emoji/douyin/666.png" alt=":douyin_666:">'
+      '<img src="http://worker.test/emoji/douyin/666.png" alt=":douyin_666:" class="cl-emoji-sticker">'
     )
     expect(body.data.comment.contentHtml).toContain(
-      '<img src="http://worker.test/emoji/qq/qq_smile.gif" alt=":qq_smile:">'
+      '<img src="http://worker.test/emoji/qq/qq_smile.gif" alt=":qq_smile:" class="cl-emoji-sticker">'
     )
 
     // 验证数据库中 content_raw 原文未变
     const row = await findCommentById(env.DB, prefix, body.data.comment.id)
     expect(row).toBeDefined()
     expect(row!.content_raw).toBe("Great post! :douyin_666: and :qq_smile:")
+  })
+})
+
+describe("Emoji Sticker Uniform Sizing & Server-side Class (cl-emoji-sticker)", () => {
+  const baseUrl = "https://example.com"
+
+  it("attaches cl-emoji-sticker class to shortcode-converted images", async () => {
+    const html = await renderAndSanitizeMarkdown(":qq_smile:", baseUrl)
+    expect(html).toContain(
+      '<img src="https://example.com/emoji/qq/qq_smile.gif" alt=":qq_smile:" class="cl-emoji-sticker">'
+    )
+  })
+
+  it("attaches cl-emoji-sticker class to Markdown image with root-relative /emoji/ path", async () => {
+    const html = await renderAndSanitizeMarkdown(
+      "![sticker](/emoji/x)",
+      baseUrl
+    )
+    expect(html).toContain(
+      '<img src="/emoji/x" alt="sticker" class="cl-emoji-sticker">'
+    )
+  })
+
+  it("attaches cl-emoji-sticker class to Markdown image with same-origin absolute URL starting with /emoji/", async () => {
+    const html = await renderAndSanitizeMarkdown(
+      "![sticker](https://example.com/emoji/qq/qq_smile.gif)",
+      baseUrl
+    )
+    expect(html).toContain(
+      '<img src="https://example.com/emoji/qq/qq_smile.gif" alt="sticker" class="cl-emoji-sticker">'
+    )
+  })
+
+  it("does NOT attach cl-emoji-sticker class to Markdown image with /img/ path", async () => {
+    const html = await renderAndSanitizeMarkdown(
+      "![uploaded](/img/2026/11/23/abcdef.webp)",
+      baseUrl
+    )
+    expect(html).toContain(
+      '<img src="/img/2026/11/23/abcdef.webp" alt="uploaded">'
+    )
+    expect(html).not.toContain("cl-emoji-sticker")
+  })
+
+  it("does NOT attach cl-emoji-sticker class to external domain /emoji/ path", async () => {
+    const html = await renderAndSanitizeMarkdown(
+      "![external](https://other.com/emoji/x)",
+      baseUrl
+    )
+    expect(html).toContain(
+      '<img src="https://other.com/emoji/x" alt="external">'
+    )
+    expect(html).not.toContain("cl-emoji-sticker")
+  })
+
+  it("does NOT attach cl-emoji-sticker class to external domain general images", async () => {
+    const html = await renderAndSanitizeMarkdown(
+      "![external](https://external.com/pic.png)",
+      baseUrl
+    )
+    expect(html).toContain(
+      '<img src="https://external.com/pic.png" alt="external">'
+    )
+    expect(html).not.toContain("cl-emoji-sticker")
+  })
+
+  it("preserves cl-emoji-sticker through rehypeSanitize while stripping non-cl- class names on img", async () => {
+    const md = "![sticker](/emoji/qq/qq_smile.gif)"
+    const html = await renderAndSanitizeMarkdown(md, baseUrl)
+    expect(html).toContain('class="cl-emoji-sticker"')
+  })
+
+  it("handles mixed content with shortcodes, relative stickers, uploads, and external emojis", async () => {
+    const md = [
+      ":qq_smile:",
+      "![rel](/emoji/douyin/666.png)",
+      "![abs](https://example.com/emoji/weibo/weibo_doge.png)",
+      "![upload](/img/avatar.png)",
+      "![ext](https://evil.org/emoji/fake.gif)"
+    ].join("\n\n")
+
+    const html = await renderAndSanitizeMarkdown(md, baseUrl)
+    expect(html).toContain(
+      '<img src="https://example.com/emoji/qq/qq_smile.gif" alt=":qq_smile:" class="cl-emoji-sticker">'
+    )
+    expect(html).toContain(
+      '<img src="/emoji/douyin/666.png" alt="rel" class="cl-emoji-sticker">'
+    )
+    expect(html).toContain(
+      '<img src="https://example.com/emoji/weibo/weibo_doge.png" alt="abs" class="cl-emoji-sticker">'
+    )
+    expect(html).toContain('<img src="/img/avatar.png" alt="upload">')
+    expect(html).toContain(
+      '<img src="https://evil.org/emoji/fake.gif" alt="ext">'
+    )
   })
 })
