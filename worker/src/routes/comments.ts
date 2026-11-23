@@ -465,7 +465,8 @@ commentsRoutes.post("/", async (c) => {
   }
 
   // 7. 内容渲染与清洗（unified 链）
-  const contentHtml = await renderAndSanitizeMarkdown(content)
+  const baseUrl = new URL(c.req.url).origin
+  const contentHtml = await renderAndSanitizeMarkdown(content, baseUrl)
 
   // 8. 敏感词与链接数规则
   const isSpam = hasDisallowedWords(
@@ -633,7 +634,8 @@ commentsRoutes.patch("/:id", async (c) => {
   }
 
   // 重新渲染+清洗 Markdown
-  const contentHtml = await renderAndSanitizeMarkdown(content)
+  const baseUrl = new URL(c.req.url).origin
+  const contentHtml = await renderAndSanitizeMarkdown(content, baseUrl)
   const updated = await updateCommentContent(
     c.env.DB,
     prefix,
