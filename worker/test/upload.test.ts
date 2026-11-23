@@ -189,7 +189,7 @@ describe("R2 Image Upload & Public Serving", () => {
     })
 
     it("rejects files larger than 10MB via Content-Length or actual size", async () => {
-      // 早期 Content-Length 检查拦截
+      // 早期 Content-Length 粗筛拦截（大于 10MB + 64KB 阈值）
       const formData = new FormData()
       formData.append(
         "file",
@@ -197,7 +197,7 @@ describe("R2 Image Upload & Public Serving", () => {
         "small.png"
       )
       const resEarly = await makeUploadRequest(formData, {
-        headers: { "Content-Length": "10485761" }
+        headers: { "Content-Length": String(10 * 1024 * 1024 + 64 * 1024 + 1) }
       })
       expect(resEarly.status).toBe(400)
       const bodyEarly = (await resEarly.json()) as {
@@ -218,6 +218,25 @@ describe("R2 Image Upload & Public Serving", () => {
         error: { code: string; message: string }
       }
       expect(body.error.code).toBe("FILE_TOO_LARGE")
+    })
+
+    it("allows legitimate near-boundary file (exact 10MB) without being rejected by Content-Length pre-filter", async () => {
+      // 创建一个恰好 10MB 的有效 PNG
+      const exact10MBBytes = new Uint8Array(10 * 1024 * 1024)
+      exact10MBBytes.set(PNG_BYTES, 0)
+      const exact10MBBlob = new Blob([exact10MBBytes], { type: "image/png" })
+
+      const formData = new FormData()
+      formData.append("file", exact10MBBlob, "exact-10mb.png")
+
+      // 模拟 multipart body 长度略大于 10MB（如 + 2KB 的 boundary/header）
+      const simulatedBodyLength = 10 * 1024 * 1024 + 2048
+      const res = await makeUploadRequest(formData, {
+        headers: { "Content-Length": String(simulatedBodyLength) }
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { data: { url: string } }
+      expect(body.data.url).toMatch(/^\/img\//)
     })
 
     it("rejects svg and non-whitelisted image types", async () => {

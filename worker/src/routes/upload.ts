@@ -183,12 +183,13 @@ uploadRoutes.post("/", async (c) => {
     })
   }
 
-  // 2. 早期 Content-Length 头校验（低成本拦截大请求，防止内存放大）
+  // 2. 早期 Content-Length 头校验（粗筛只拦真正的内存放大，放宽 64KB 容纳 multipart headers/token）
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+  const MAX_BODY_PREFILTER_SIZE = MAX_FILE_SIZE + 64 * 1024
   const contentLength = c.req.header("content-length")
   if (contentLength) {
     const parsedLength = Number.parseInt(contentLength, 10)
-    if (!Number.isNaN(parsedLength) && parsedLength > MAX_FILE_SIZE) {
+    if (!Number.isNaN(parsedLength) && parsedLength > MAX_BODY_PREFILTER_SIZE) {
       return calineError(c, 400, "FILE_TOO_LARGE", getMsg("FILE_TOO_LARGE"))
     }
   }
