@@ -14,11 +14,14 @@ import { authMiddleware } from "./middleware/auth"
 import { adminRoutes } from "./routes/admin"
 import { authRoutes } from "./routes/auth"
 import { commentsRoutes } from "./routes/comments"
+import { emojiRoutes } from "./routes/emoji"
+import { imgRoutes } from "./routes/img"
 import { meRoutes } from "./routes/me"
 import { pagesRoutes } from "./routes/pages"
 import { twoFactorManageRoutes } from "./routes/twofa-manage"
 import { publicRoutes } from "./routes/public"
 import { setupRoutes } from "./routes/setup"
+import { uploadRoutes } from "./routes/upload"
 import { wakerRoutes } from "./routes/waker"
 import { runScheduledTask } from "./services/scheduled-task"
 import type { Env, HonoEnv } from "./types"
@@ -56,6 +59,7 @@ app.use("/api/*", async (c, next) => {
 const PUBLIC_ROUTES = new Set([
   "GET /api/health",
   "GET /api/public",
+  "POST /api/upload",
   "POST /api/auth/register",
   "POST /api/auth/login",
   "POST /api/auth/2fa/verify",
@@ -94,7 +98,10 @@ app.route("/api/comments", commentsRoutes)
 app.route("/api/pages", pagesRoutes)
 app.route("/api/admin", adminRoutes)
 app.route("/api/setup", setupRoutes)
+app.route("/api/upload", uploadRoutes)
 app.route("/_waker", wakerRoutes)
+app.route("/img", imgRoutes)
+app.route("/emoji", emojiRoutes)
 
 // PWA 安装清单（规格第 4 项）：由 Worker 从身份真源动态生成，名字零第二份字面量。
 // 必须在 SPA 回落 app.get("*") 之前注册；缓存口径与 /api/public 对齐。

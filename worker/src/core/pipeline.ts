@@ -18,7 +18,7 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize"
 import rehypeStringify from "rehype-stringify"
 import type { CommentStatus } from "@caline/shared"
 
-// 扩展 GitHub 默认 schema，放行 hljs 与 language-* 类名，否则代码高亮样式被剥离（规格 §9 结论 ①）
+// 扩展 GitHub 默认 schema，放行 hljs 与 language-* 类名，并放行 img 及其属性（alt, title, src），协议严格限 http(s)
 const SANITIZE_SCHEMA = {
   ...defaultSchema,
   attributes: {
@@ -27,7 +27,20 @@ const SANITIZE_SCHEMA = {
       ...(defaultSchema.attributes?.code || []),
       ["className", /^language-./, "hljs"]
     ],
-    span: [...(defaultSchema.attributes?.span || []), ["className", /^hljs-./]]
+    span: [...(defaultSchema.attributes?.span || []), ["className", /^hljs-./]],
+    img: [
+      ...(defaultSchema.attributes?.img || []),
+      "alt",
+      "title",
+      "src",
+      "loading",
+      "width",
+      "height"
+    ]
+  },
+  protocols: {
+    ...defaultSchema.protocols,
+    src: ["http", "https"]
   }
 }
 

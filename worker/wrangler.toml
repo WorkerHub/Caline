@@ -18,6 +18,12 @@ binding = "DB"
 database_name = "D1_DATABASE_NAME_PLACEHOLDER"
 database_id = "D1_DATABASE_ID_PLACEHOLDER"
 
+# 业务图片对象存储：专属 R2 bucket，绑定名 IMAGES。
+# bucket 名与绑定非密钥、非资源 ID；bucket 本身由部署/用户创建，代码侧只声明绑定。
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "caline-images"
+
 # 刻意不提交 [vars]：TABLE_PREFIX 只在部署期由部署脚本（scripts/materialize-secrets.mjs）
 # 按三态注入（未设置/空 → 项目默认前缀，保留字 none → ""，其他值原样）；不带该变量时
 # 运行时回落到 worker/src/config/defaults.json 的默认前缀（补尾下划线），共享库上零配置也不会串表。
