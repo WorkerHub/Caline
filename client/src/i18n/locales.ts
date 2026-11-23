@@ -43,6 +43,14 @@ export type LocaleKey =
   | "verified"
   | "posting_as"
   | "logout"
+  | "btn_image"
+  | "uploading"
+  | "upload_failed"
+  | "emoji_panel"
+  | "emoji_group_default"
+  | "emoji_group_qq"
+  | "emoji_group_weibo"
+  | "emoji_group_bilibili"
 
 export const zhCN: Record<LocaleKey, string> = {
   placeholder_nick: "昵称 *",
@@ -83,7 +91,15 @@ export const zhCN: Record<LocaleKey, string> = {
   admin: "管理员",
   verified: "已认证",
   posting_as: "以 {name} 身份发表",
-  logout: "退出登录"
+  logout: "退出登录",
+  btn_image: "插入图片",
+  uploading: "上传中...",
+  upload_failed: "图片上传失败",
+  emoji_panel: "表情",
+  emoji_group_default: "默认",
+  emoji_group_qq: "QQ",
+  emoji_group_weibo: "微博",
+  emoji_group_bilibili: "B站"
 }
 
 export const enUS: Record<LocaleKey, string> = {
@@ -125,7 +141,15 @@ export const enUS: Record<LocaleKey, string> = {
   admin: "Admin",
   verified: "Verified",
   posting_as: "Posting as {name}",
-  logout: "Sign out"
+  logout: "Sign out",
+  btn_image: "Insert image",
+  uploading: "Uploading...",
+  upload_failed: "Image upload failed",
+  emoji_panel: "Emoji",
+  emoji_group_default: "Default",
+  emoji_group_qq: "QQ",
+  emoji_group_weibo: "Weibo",
+  emoji_group_bilibili: "Bilibili"
 }
 
 export type SupportedLang = "zh-CN" | "en"

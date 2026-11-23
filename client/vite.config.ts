@@ -1,8 +1,12 @@
 import fs from "node:fs"
 import path from "node:path"
 import { defineConfig } from "vite"
+import pkg from "./package.json" with { type: "json" }
 
 export default defineConfig({
+  define: {
+    __CALINE_VERSION__: JSON.stringify(pkg.version)
+  },
   build: {
     target: "es2020",
     lib: {
