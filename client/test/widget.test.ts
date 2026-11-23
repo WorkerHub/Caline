@@ -215,6 +215,90 @@ Reply to @alice and @bob
       // 避免裸 img[src*="/emoji/"] 导致全局宿主样式污染
       expect(css).not.toMatch(/(?:^|\n)\s*img\[src\*="\/emoji\/"\]/)
     })
+
+    it("ensures theme.css defines max-width: 100%, height: auto, and max-height: 480px for normal images in .cl-comment-text and .cl-editor-preview", () => {
+      const cssPath = path.resolve(
+        import.meta.dirname,
+        "../src/styles/theme.css"
+      )
+      const css = fs.readFileSync(cssPath, "utf8")
+      expect(css).toContain(".cl-comment-text img")
+      expect(css).toContain(".cl-editor-preview img")
+      expect(css).toContain("max-width: 100%")
+      expect(css).toContain("height: auto")
+      expect(css).toContain("max-height: 480px")
+      expect(css).toContain("object-fit: contain")
+      // 避免裸 img 导致全局宿主样式污染
+      expect(css).not.toMatch(/(?:^|\n)\s*img\s*\{/)
+    })
+
+    it("verifies computed styles: normal images (/img/ & external) constrained to 100% max-width and 480px max-height, stickers stay 28px", () => {
+      const cssPath = path.resolve(
+        import.meta.dirname,
+        "../src/styles/theme.css"
+      )
+      const css = fs.readFileSync(cssPath, "utf8")
+      const styleEl = document.createElement("style")
+      styleEl.textContent = css
+      document.head.appendChild(styleEl)
+
+      const wrapper = document.createElement("div")
+      wrapper.innerHTML = `
+        <div class="cl-comment-text">
+          <img id="t-comment-upload" src="/img/2026/11/23/test.webp" />
+          <img id="t-comment-external" src="https://example.com/tall-pic.jpg" />
+          <img id="t-comment-sticker" src="https://example.com/emoji/qq/doge.png" class="cl-emoji-sticker" />
+        </div>
+        <div class="cl-editor-preview">
+          <img id="t-preview-upload" src="/img/2026/11/23/test.webp" class="cl-md-img" />
+          <img id="t-preview-external" src="https://example.com/tall-pic.jpg" class="cl-md-img" />
+          <img id="t-preview-sticker" src="https://example.com/emoji/douyin/awsl.png" class="cl-emoji-sticker" />
+        </div>
+      `
+      document.body.appendChild(wrapper)
+
+      try {
+        const commentUpload = document.getElementById("t-comment-upload")!
+        const commentExternal = document.getElementById("t-comment-external")!
+        const commentSticker = document.getElementById("t-comment-sticker")!
+        const previewUpload = document.getElementById("t-preview-upload")!
+        const previewExternal = document.getElementById("t-preview-external")!
+        const previewSticker = document.getElementById("t-preview-sticker")!
+
+        const cUploadStyle = window.getComputedStyle(commentUpload)
+        expect(cUploadStyle.maxWidth).toBe("100%")
+        expect(cUploadStyle.height).toBe("auto")
+        expect(cUploadStyle.maxHeight).toBe("480px")
+
+        const cExternalStyle = window.getComputedStyle(commentExternal)
+        expect(cExternalStyle.maxWidth).toBe("100%")
+        expect(cExternalStyle.height).toBe("auto")
+        expect(cExternalStyle.maxHeight).toBe("480px")
+
+        const cStickerStyle = window.getComputedStyle(commentSticker)
+        expect(cStickerStyle.height).toBe("28px")
+        expect(cStickerStyle.maxHeight).toBe("28px")
+        expect(cStickerStyle.width).toBe("auto")
+
+        const pUploadStyle = window.getComputedStyle(previewUpload)
+        expect(pUploadStyle.maxWidth).toBe("100%")
+        expect(pUploadStyle.height).toBe("auto")
+        expect(pUploadStyle.maxHeight).toBe("480px")
+
+        const pExternalStyle = window.getComputedStyle(previewExternal)
+        expect(pExternalStyle.maxWidth).toBe("100%")
+        expect(pExternalStyle.height).toBe("auto")
+        expect(pExternalStyle.maxHeight).toBe("480px")
+
+        const pStickerStyle = window.getComputedStyle(previewSticker)
+        expect(pStickerStyle.height).toBe("28px")
+        expect(pStickerStyle.maxHeight).toBe("28px")
+        expect(pStickerStyle.width).toBe("auto")
+      } finally {
+        styleEl.remove()
+        wrapper.remove()
+      }
+    })
   })
 
   describe("Local storage: guest profile and 15m edit tokens", () => {

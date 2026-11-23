@@ -392,6 +392,16 @@
   color: var(--cl-color-danger);
 }
 
+/* 普通图片显示约束：防超宽超长竖图刷屏，超限按比例缩，不变形 */
+.cl-comment-text img,
+.cl-editor-preview img,
+.cl-md-img {
+  max-width: 100%;
+  height: auto;
+  max-height: 480px;
+  object-fit: contain;
+}
+
 /* 统一贴纸显示尺寸与存量兜底（28px 定高、正文混排垂直对齐不跳行，限定在评论与预览容器内防宿主污染） */
 .cl-emoji-sticker,
 .cl-comment-text img[src*="/emoji/"],
