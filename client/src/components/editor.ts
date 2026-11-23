@@ -741,6 +741,13 @@ export function createEditor(props: EditorProps): HTMLElement {
             },
             "error-callback": () => {
               commentTurnstileToken = ""
+              if (commentWidgetId && window.turnstile) {
+                try {
+                  window.turnstile.reset(commentWidgetId)
+                } catch {
+                  // ignore
+                }
+              }
             }
           })
         }
@@ -767,6 +774,13 @@ export function createEditor(props: EditorProps): HTMLElement {
             },
             "error-callback": () => {
               uploadTurnstileToken = ""
+              if (uploadWidgetId && window.turnstile) {
+                try {
+                  window.turnstile.reset(uploadWidgetId)
+                } catch {
+                  // ignore
+                }
+              }
             }
           })
         }

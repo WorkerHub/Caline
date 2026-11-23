@@ -2725,6 +2725,8 @@ Reply to @alice and @bob
       let commentCallback: ((token: string) => void) | undefined
       let uploadCallback: ((token: string) => void) | undefined
       let commentExpiredCallback: (() => void) | undefined
+      let commentErrorCallback: (() => void) | undefined
+      let uploadErrorCallback: (() => void) | undefined
 
       const mockTurnstile = {
         render: vi
@@ -2736,10 +2738,12 @@ Reply to @alice and @bob
                 commentExpiredCallback = options[
                   "expired-callback"
                 ] as () => void
+                commentErrorCallback = options["error-callback"] as () => void
                 return "widget-comment-1"
               }
               if (container.classList.contains("cl-turnstile-upload")) {
                 uploadCallback = options.callback as (t: string) => void
+                uploadErrorCallback = options["error-callback"] as () => void
                 return "widget-upload-1"
               }
               return "widget-other"
@@ -2901,6 +2905,77 @@ Reply to @alice and @bob
       // 5. 过期回调重置
       commentExpiredCallback?.()
       expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-comment-1")
+
+      // 6. error-callback 触发重置
+      commentErrorCallback?.()
+      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-comment-1")
+      uploadErrorCallback?.()
+      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-upload-1")
+    })
+
+    it("preserves options.turnstile when /api/public omits turnstileEnabled or fails", async () => {
+      document.body.innerHTML = '<div id="caline"></div>'
+
+      const mockTurnstile = {
+        render: vi.fn().mockReturnValue("w-fallback"),
+        reset: vi.fn(),
+        remove: vi.fn(),
+        getResponse: vi.fn().mockReturnValue("")
+      }
+      ;(window as unknown as { turnstile: unknown }).turnstile = mockTurnstile
+
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/api/public")) {
+          // 模拟服务端未包含 turnstile 字段的公开引导响应
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: {
+                name: "Caline",
+                appMode: "multi",
+                registrationEnabled: true,
+                emailConfigured: false
+              }
+            })
+          })
+        }
+        if (url.includes("/api/auth/me")) {
+          return Promise.resolve({
+            ok: false,
+            status: 401,
+            json: async () => ({ error: { code: "UNAUTHORIZED" } })
+          })
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: { items: [], total: 0, totalPages: 0 } })
+        })
+      })
+      window.fetch = fetchMock as unknown as typeof fetch
+
+      const widget = init({
+        el: "#caline",
+        serverURL: "https://example.com",
+        turnstile: {
+          enabled: true,
+          siteKey: "0x4AAAAAA_fallback_key"
+        }
+      })
+      await widget.checkAuth()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // options.turnstile 不会被冲刷置空，依然正常生效
+      expect(document.querySelector(".cl-turnstile-comment")).not.toBeNull()
+      expect(document.querySelector(".cl-turnstile-upload")).not.toBeNull()
+      expect(mockTurnstile.render).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          sitekey: "0x4AAAAAA_fallback_key"
+        })
+      )
     })
 
     it("resets Turnstile widget when comment submission or upload fails to allow retry", async () => {

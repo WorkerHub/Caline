@@ -56,6 +56,7 @@ export class CalineWidget {
     enabled: false,
     siteKey: ""
   }
+  private initialTurnstileOptions?: { enabled?: boolean; siteKey?: string }
   private mainEditorEl: HTMLElement | null = null
   private replyEditorEl: HTMLElement | null = null
 
@@ -112,6 +113,7 @@ export class CalineWidget {
     this.t = createTranslator(lang)
     this.client = new CalineApiClient(this.serverUrl)
 
+    this.initialTurnstileOptions = options.turnstile
     if (options.turnstile) {
       this.turnstileConfig = {
         enabled: Boolean(
@@ -130,32 +132,64 @@ export class CalineWidget {
   private async loadPublicConfig(): Promise<void> {
     try {
       const config = await this.client.getPublicConfig()
-      const enabled = Boolean(
-        config?.turnstileEnabled && config?.turnstileSiteKey
-      )
-      const siteKey =
-        typeof config?.turnstileSiteKey === "string"
-          ? config.turnstileSiteKey.trim()
-          : ""
+      // 若服务端公开端点明确下发了 turnstile 状态，以服务端契约为准
+      if (typeof config?.turnstileEnabled === "boolean") {
+        const siteKey =
+          typeof config.turnstileSiteKey === "string"
+            ? config.turnstileSiteKey.trim()
+            : ""
+        const enabled = config.turnstileEnabled && siteKey.length > 0
 
-      const changed =
-        this.turnstileConfig.enabled !== enabled ||
-        this.turnstileConfig.siteKey !== siteKey
+        const changed =
+          this.turnstileConfig.enabled !== enabled ||
+          this.turnstileConfig.siteKey !== siteKey
 
-      if (changed) {
-        this.turnstileConfig = { enabled, siteKey }
-        if (!this.currentUser) {
-          this.renderMainEditor()
-          if (this.currentReplyTarget) {
-            this.showReplyEditor(
-              this.currentReplyTarget.comment,
-              this.currentReplyTarget.rootId
-            )
+        if (changed) {
+          this.turnstileConfig = { enabled, siteKey }
+          if (!this.currentUser) {
+            this.renderMainEditor()
+            if (this.currentReplyTarget) {
+              this.showReplyEditor(
+                this.currentReplyTarget.comment,
+                this.currentReplyTarget.rootId
+              )
+            }
+          }
+        }
+      } else if (this.initialTurnstileOptions) {
+        // 服务端端点缺省相关字段时，回退并保留调用方显式配置，不被置空冲刷
+        const enabled = Boolean(
+          this.initialTurnstileOptions.enabled &&
+            this.initialTurnstileOptions.siteKey
+        )
+        const siteKey = (this.initialTurnstileOptions.siteKey || "").trim()
+        const changed =
+          this.turnstileConfig.enabled !== enabled ||
+          this.turnstileConfig.siteKey !== siteKey
+
+        if (changed) {
+          this.turnstileConfig = { enabled, siteKey }
+          if (!this.currentUser) {
+            this.renderMainEditor()
+            if (this.currentReplyTarget) {
+              this.showReplyEditor(
+                this.currentReplyTarget.comment,
+                this.currentReplyTarget.rootId
+              )
+            }
           }
         }
       }
     } catch {
-      // ignore
+      // 异常时保留调用方显式配置
+      if (this.initialTurnstileOptions) {
+        const enabled = Boolean(
+          this.initialTurnstileOptions.enabled &&
+            this.initialTurnstileOptions.siteKey
+        )
+        const siteKey = (this.initialTurnstileOptions.siteKey || "").trim()
+        this.turnstileConfig = { enabled, siteKey }
+      }
     }
   }
 
