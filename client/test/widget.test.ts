@@ -33,6 +33,11 @@ import {
   prefetchEmojiManifests,
   resolveEmojiImageUrl
 } from "../src/utils/emoji"
+import {
+  TURNSTILE_SCRIPT_URL,
+  loadTurnstileScript,
+  resetScriptLoadPromiseForTest
+} from "../src/utils/turnstile"
 
 describe("Caline Client Widget", () => {
   beforeEach(() => {
@@ -2564,6 +2569,674 @@ Reply to @alice and @bob
 
       const badges = tree.querySelectorAll(".cl-badge")
       expect(badges.length).toBe(0)
+    })
+  })
+
+  describe("Cloudflare Turnstile challenges (visitor comment & upload)", () => {
+    beforeEach(() => {
+      resetScriptLoadPromiseForTest()
+      delete (window as unknown as { turnstile?: unknown }).turnstile
+      document
+        .querySelectorAll('script[src*="challenges.cloudflare.com/turnstile"]')
+        .forEach((s) => {
+          s.remove()
+        })
+    })
+
+    it("loadTurnstileScript loads official script URL and resolves window.turnstile", async () => {
+      expect(TURNSTILE_SCRIPT_URL).toBe(
+        "https://challenges.cloudflare.com/turnstile/v0/api.js"
+      )
+
+      const promise = loadTurnstileScript()
+      const script = document.querySelector<HTMLScriptElement>(
+        'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]'
+      )
+      expect(script).not.toBeNull()
+      expect(script?.async).toBe(true)
+      expect(script?.defer).toBe(true)
+
+      const mockApi = {
+        render: vi.fn().mockReturnValue("w1"),
+        reset: vi.fn(),
+        remove: vi.fn(),
+        getResponse: vi.fn().mockReturnValue("mock-token")
+      }
+      ;(window as unknown as { turnstile: unknown }).turnstile = mockApi
+      script?.onload?.(new Event("load"))
+
+      const api = await promise
+      expect(api).toBe(mockApi)
+    })
+
+    it("site disabled: zero change in UI and behavior (no script loaded, no challenge rendered)", async () => {
+      document.body.innerHTML = '<div id="caline"></div>'
+
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/api/public")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: {
+                turnstileEnabled: false,
+                turnstileSiteKey: ""
+              }
+            })
+          })
+        }
+        if (url.includes("/api/auth/me")) {
+          return Promise.resolve({
+            ok: false,
+            status: 401,
+            json: async () => ({ error: { code: "UNAUTHORIZED" } })
+          })
+        }
+        if (url.includes("/api/comments")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: { items: [], total: 0, totalPages: 0 }
+            })
+          })
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: {} })
+        })
+      })
+      window.fetch = fetchMock as unknown as typeof fetch
+
+      const widget = init({ el: "#caline", serverURL: "https://example.com" })
+      expect(widget).toBeDefined()
+      await widget.checkAuth()
+
+      // 验证未加载官方脚本
+      const script = document.querySelector(
+        'script[src*="challenges.cloudflare.com/turnstile"]'
+      )
+      expect(script).toBeNull()
+
+      // 验证未渲染挑战插槽
+      expect(document.querySelector(".cl-turnstile-comment")).toBeNull()
+      expect(document.querySelector(".cl-turnstile-upload")).toBeNull()
+    })
+
+    it("logged-in user: exempt from Turnstile challenge even when site is enabled", async () => {
+      document.body.innerHTML = '<div id="caline"></div>'
+
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/api/public")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: {
+                turnstileEnabled: true,
+                turnstileSiteKey: "0x4AAAAAA_test_key"
+              }
+            })
+          })
+        }
+        if (url.includes("/api/auth/me")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: {
+                id: 1,
+                email: "member@example.com",
+                displayName: "Member",
+                role: "member"
+              }
+            })
+          })
+        }
+        if (url.includes("/api/comments")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: { items: [], total: 0, totalPages: 0 }
+            })
+          })
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: {} })
+        })
+      })
+      window.fetch = fetchMock as unknown as typeof fetch
+
+      const widget = init({ el: "#caline", serverURL: "https://example.com" })
+      await widget.checkAuth()
+
+      // 登录用户两处均免挑战
+      expect(document.querySelector(".cl-turnstile-comment")).toBeNull()
+      expect(document.querySelector(".cl-turnstile-upload")).toBeNull()
+    })
+
+    it("site enabled & visitor: renders comment & upload challenges, submits tokens, supports retry on failure", async () => {
+      document.body.innerHTML = '<div id="caline"></div>'
+
+      let commentCallback: ((token: string) => void) | undefined
+      let uploadCallback: ((token: string) => void) | undefined
+      let commentExpiredCallback: (() => void) | undefined
+      let commentErrorCallback: (() => void) | undefined
+      let uploadErrorCallback: (() => void) | undefined
+
+      const mockTurnstile = {
+        render: vi
+          .fn()
+          .mockImplementation(
+            (container: HTMLElement, options: Record<string, unknown>) => {
+              if (container.classList.contains("cl-turnstile-comment")) {
+                commentCallback = options.callback as (t: string) => void
+                commentExpiredCallback = options[
+                  "expired-callback"
+                ] as () => void
+                commentErrorCallback = options["error-callback"] as () => void
+                return "widget-comment-1"
+              }
+              if (container.classList.contains("cl-turnstile-upload")) {
+                uploadCallback = options.callback as (t: string) => void
+                uploadErrorCallback = options["error-callback"] as () => void
+                return "widget-upload-1"
+              }
+              return "widget-other"
+            }
+          ),
+        reset: vi.fn(),
+        remove: vi.fn(),
+        getResponse: vi.fn().mockReturnValue("")
+      }
+      ;(window as unknown as { turnstile: unknown }).turnstile = mockTurnstile
+
+      let submittedPayload: Record<string, unknown> | null = null
+      let uploadedFormData: FormData | null = null
+
+      const fetchMock = vi
+        .fn()
+        .mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/api/public")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  turnstileEnabled: true,
+                  turnstileSiteKey: "0x4AAAAAA_test_key"
+                }
+              })
+            })
+          }
+          if (url.includes("/api/auth/me")) {
+            return Promise.resolve({
+              ok: false,
+              status: 401,
+              json: async () => ({ error: { code: "UNAUTHORIZED" } })
+            })
+          }
+          if (url.includes("/api/comments") && init?.method === "POST") {
+            submittedPayload = JSON.parse(init.body as string)
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  comment: {
+                    id: 101,
+                    nick: submittedPayload?.nick,
+                    contentHtml: "<p>Hello</p>",
+                    createdAt: new Date().toISOString()
+                  }
+                }
+              })
+            })
+          }
+          if (url.includes("/api/upload") && init?.method === "POST") {
+            uploadedFormData = init.body as FormData
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: { url: "/img/2026/11/test.png" }
+              })
+            })
+          }
+          if (url.includes("/api/comments")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: { items: [], total: 0, totalPages: 0 }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: {} })
+          })
+        })
+      window.fetch = fetchMock as unknown as typeof fetch
+
+      const widget = init({
+        el: "#caline",
+        serverURL: "https://example.com",
+        turnstile: {
+          enabled: true,
+          siteKey: "0x4AAAAAA_test_key"
+        }
+      })
+      await widget.checkAuth()
+
+      // 等待 loadTurnstileScript 异步挂载
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // 1. 验证访客发表评论与上传挑战两处已渲染官方组件插槽
+      const commentSlot = document.querySelector(".cl-turnstile-comment")
+      const uploadSlot = document.querySelector(".cl-turnstile-upload")
+      expect(commentSlot).not.toBeNull()
+      expect(uploadSlot).not.toBeNull()
+      expect(mockTurnstile.render).toHaveBeenCalledWith(
+        commentSlot,
+        expect.objectContaining({
+          sitekey: "0x4AAAAAA_test_key"
+        })
+      )
+      expect(mockTurnstile.render).toHaveBeenCalledWith(
+        uploadSlot,
+        expect.objectContaining({
+          sitekey: "0x4AAAAAA_test_key"
+        })
+      )
+
+      // 2. 模拟官方组件校验成功返回 token
+      commentCallback?.("token-comment-abc")
+      uploadCallback?.("token-upload-xyz")
+
+      // 3. 访客发表评论
+      const nickInput =
+        document.querySelector<HTMLInputElement>(".cl-input-nick")!
+      const textarea =
+        document.querySelector<HTMLTextAreaElement>(".cl-textarea")!
+      const submitBtn =
+        document.querySelector<HTMLButtonElement>(".cl-btn-primary")!
+
+      nickInput.value = "GuestAlice"
+      textarea.value = "Testing turnstile comment"
+      textarea.dispatchEvent(new Event("input"))
+
+      submitBtn.click()
+
+      await vi.waitFor(() => {
+        expect(submittedPayload).not.toBeNull()
+        expect(
+          (submittedPayload as Record<string, unknown> | null)?.turnstileToken
+        ).toBe("token-comment-abc")
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-comment-1")
+      })
+
+      // 4. 访客图片上传
+      const file = new File(["dummy content"], "photo.png", {
+        type: "image/png"
+      })
+      const fileInput =
+        document.querySelector<HTMLInputElement>('input[type="file"]')!
+      Object.defineProperty(fileInput, "files", {
+        value: [file],
+        writable: true
+      })
+      fileInput.dispatchEvent(new Event("change"))
+
+      await vi.waitFor(() => {
+        expect(uploadedFormData).not.toBeNull()
+        expect(
+          (uploadedFormData as FormData | null)?.get("turnstileToken")
+        ).toBe("token-upload-xyz")
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-upload-1")
+      })
+
+      // 5. 过期回调重置
+      commentExpiredCallback?.()
+      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-comment-1")
+
+      // 6. error-callback 触发重置
+      commentErrorCallback?.()
+      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-comment-1")
+      uploadErrorCallback?.()
+      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-upload-1")
+    })
+
+    it("preserves options.turnstile when /api/public omits turnstileEnabled or fails", async () => {
+      document.body.innerHTML = '<div id="caline"></div>'
+
+      const mockTurnstile = {
+        render: vi.fn().mockReturnValue("w-fallback"),
+        reset: vi.fn(),
+        remove: vi.fn(),
+        getResponse: vi.fn().mockReturnValue("")
+      }
+      ;(window as unknown as { turnstile: unknown }).turnstile = mockTurnstile
+
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/api/public")) {
+          // 模拟服务端未包含 turnstile 字段的公开引导响应
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: {
+                name: "Caline",
+                appMode: "multi",
+                registrationEnabled: true,
+                emailConfigured: false
+              }
+            })
+          })
+        }
+        if (url.includes("/api/auth/me")) {
+          return Promise.resolve({
+            ok: false,
+            status: 401,
+            json: async () => ({ error: { code: "UNAUTHORIZED" } })
+          })
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: { items: [], total: 0, totalPages: 0 } })
+        })
+      })
+      window.fetch = fetchMock as unknown as typeof fetch
+
+      const widget = init({
+        el: "#caline",
+        serverURL: "https://example.com",
+        turnstile: {
+          enabled: true,
+          siteKey: "0x4AAAAAA_fallback_key"
+        }
+      })
+      await widget.checkAuth()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // options.turnstile 不会被冲刷置空，依然正常生效
+      expect(document.querySelector(".cl-turnstile-comment")).not.toBeNull()
+      expect(document.querySelector(".cl-turnstile-upload")).not.toBeNull()
+      expect(mockTurnstile.render).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          sitekey: "0x4AAAAAA_fallback_key"
+        })
+      )
+    })
+
+    it("resets Turnstile widget when comment submission or upload fails to allow retry", async () => {
+      let commentCallback: ((token: string) => void) | undefined
+      let uploadCallback: ((token: string) => void) | undefined
+
+      const mockTurnstile = {
+        render: vi
+          .fn()
+          .mockImplementation(
+            (container: HTMLElement, options: Record<string, unknown>) => {
+              if (container.classList.contains("cl-turnstile-comment")) {
+                commentCallback = options.callback as (t: string) => void
+                return "fail-widget-comment"
+              }
+              if (container.classList.contains("cl-turnstile-upload")) {
+                uploadCallback = options.callback as (t: string) => void
+                return "fail-widget-upload"
+              }
+              return "fail-other"
+            }
+          ),
+        reset: vi.fn(),
+        remove: vi.fn(),
+        getResponse: vi.fn().mockReturnValue("")
+      }
+      ;(window as unknown as { turnstile: unknown }).turnstile = mockTurnstile
+
+      const fetchMock = vi
+        .fn()
+        .mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/api/comments") && init?.method === "POST") {
+            return Promise.resolve({
+              ok: false,
+              status: 403,
+              json: async () => ({
+                error: { code: "TURNSTILE_FAILED", message: "Challenge failed" }
+              })
+            })
+          }
+          if (url.includes("/api/upload") && init?.method === "POST") {
+            return Promise.resolve({
+              ok: false,
+              status: 403,
+              json: async () => ({
+                error: {
+                  code: "TURNSTILE_FAILED",
+                  message: "Upload challenge failed"
+                }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: {} })
+          })
+        })
+      window.fetch = fetchMock as unknown as typeof fetch
+      window.alert = vi.fn()
+
+      const editor = createEditor({
+        t: createTranslator("zh-CN"),
+        serverUrl: "https://example.com",
+        user: null,
+        turnstile: { enabled: true, siteKey: "0x4AAAAAA_test_key" },
+        onSubmit: async () => {
+          const client = new CalineApiClient("https://example.com")
+          await client.createComment({ url: "/", content: "test" })
+        }
+      })
+      document.body.appendChild(editor)
+
+      await Promise.resolve()
+      await Promise.resolve()
+
+      commentCallback?.("bad-token")
+      uploadCallback?.("bad-upload-token")
+
+      // 1. 评论失败重试
+      const nickInput =
+        editor.querySelector<HTMLInputElement>(".cl-input-nick")!
+      const textarea =
+        editor.querySelector<HTMLTextAreaElement>(".cl-textarea")!
+      const submitBtn =
+        editor.querySelector<HTMLButtonElement>(".cl-btn-primary")!
+
+      nickInput.value = "Guest"
+      textarea.value = "Test content"
+      textarea.dispatchEvent(new Event("input"))
+
+      submitBtn.click()
+      await vi.waitFor(() => {
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("fail-widget-comment")
+      })
+
+      // 2. 上传失败重试
+      const file = new File(["dummy"], "bad.png", { type: "image/png" })
+      const fileInput =
+        editor.querySelector<HTMLInputElement>('input[type="file"]')!
+      Object.defineProperty(fileInput, "files", {
+        value: [file],
+        writable: true
+      })
+      fileInput.dispatchEvent(new Event("change"))
+      await vi.waitFor(() => {
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("fail-widget-upload")
+      })
+
+      // 清理
+      ;(editor as HTMLElement & { cleanup?: () => void }).cleanup?.()
+      expect(mockTurnstile.remove).toHaveBeenCalledWith("fail-widget-comment")
+      expect(mockTurnstile.remove).toHaveBeenCalledWith("fail-widget-upload")
+      editor.remove()
+    })
+
+    it("reply editor renders Turnstile challenge and passes turnstileToken", async () => {
+      let replyCommentCallback: ((token: string) => void) | undefined
+
+      const mockTurnstile = {
+        render: vi
+          .fn()
+          .mockImplementation(
+            (container: HTMLElement, options: Record<string, unknown>) => {
+              if (container.classList.contains("cl-turnstile-comment")) {
+                replyCommentCallback = options.callback as (t: string) => void
+                return "reply-widget-1"
+              }
+              return "reply-upload-1"
+            }
+          ),
+        reset: vi.fn(),
+        remove: vi.fn(),
+        getResponse: vi.fn().mockReturnValue("")
+      }
+      ;(window as unknown as { turnstile: unknown }).turnstile = mockTurnstile
+
+      let replySubmittedPayload: Record<string, unknown> | null = null
+
+      const fetchMock = vi
+        .fn()
+        .mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/api/public")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  turnstileEnabled: true,
+                  turnstileSiteKey: "0x4AAAAAA_test_key"
+                }
+              })
+            })
+          }
+          if (url.includes("/api/auth/me")) {
+            return Promise.resolve({
+              ok: false,
+              status: 401,
+              json: async () => ({ error: { code: "UNAUTHORIZED" } })
+            })
+          }
+          if (url.includes("/api/comments") && init?.method === "POST") {
+            replySubmittedPayload = JSON.parse(init.body as string)
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  comment: {
+                    id: 202,
+                    nick: replySubmittedPayload?.nick,
+                    contentHtml: "<p>Reply</p>",
+                    createdAt: new Date().toISOString()
+                  }
+                }
+              })
+            })
+          }
+          if (url.includes("/api/comments")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  items: [
+                    {
+                      id: 1,
+                      userId: null,
+                      nick: "ParentAuthor",
+                      avatar: "",
+                      url: "/",
+                      contentHtml: "<p>Parent</p>",
+                      likeCount: 0,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                      replies: []
+                    }
+                  ],
+                  total: 1,
+                  totalPages: 1
+                }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: {} })
+          })
+        })
+      window.fetch = fetchMock as unknown as typeof fetch
+
+      document.body.innerHTML = '<div id="caline"></div>'
+      const widget = init({
+        el: "#caline",
+        serverURL: "https://example.com",
+        turnstile: { enabled: true, siteKey: "0x4AAAAAA_test_key" }
+      })
+      await widget.checkAuth()
+
+      // 点击回复按钮展开回复编辑器
+      await vi.waitFor(() => {
+        const replyBtn =
+          document.querySelector<HTMLButtonElement>(".cl-btn-reply")
+        expect(replyBtn).not.toBeNull()
+      })
+
+      const replyBtn =
+        document.querySelector<HTMLButtonElement>(".cl-btn-reply")!
+      replyBtn.click()
+
+      await vi.waitFor(() => {
+        const replySlot = document.querySelector(".cl-reply-editor-slot")
+        expect(replySlot).not.toBeNull()
+        expect(replySlot?.querySelector(".cl-turnstile-comment")).not.toBeNull()
+      })
+
+      replyCommentCallback?.("reply-turnstile-token-999")
+
+      const replySlot = document.querySelector(".cl-reply-editor-slot")!
+      const nickInput =
+        replySlot.querySelector<HTMLInputElement>(".cl-input-nick")!
+      const textarea =
+        replySlot.querySelector<HTMLTextAreaElement>(".cl-textarea")!
+      const submitBtn =
+        replySlot.querySelector<HTMLButtonElement>(".cl-btn-primary")!
+
+      nickInput.value = "GuestReplier"
+      textarea.value = "My reply content"
+      textarea.dispatchEvent(new Event("input"))
+
+      submitBtn.click()
+
+      await vi.waitFor(() => {
+        expect(replySubmittedPayload).not.toBeNull()
+        expect(replySubmittedPayload?.turnstileToken).toBe(
+          "reply-turnstile-token-999"
+        )
+        expect(replySubmittedPayload?.pid).toBe(1)
+        expect(replySubmittedPayload?.rid).toBe(1)
+      })
     })
   })
 })

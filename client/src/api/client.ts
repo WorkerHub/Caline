@@ -213,4 +213,16 @@ export class CalineApiClient {
       body: formData
     })
   }
+
+  // 13. 获取公开引导配置 (GET /api/public)
+  async getPublicConfig(): Promise<{
+    turnstileEnabled?: boolean
+    turnstileSiteKey?: string
+    [key: string]: unknown
+  }> {
+    return this.request<{
+      turnstileEnabled?: boolean
+      turnstileSiteKey?: string
+    }>("/api/public")
+  }
 }

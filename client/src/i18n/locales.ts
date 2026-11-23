@@ -52,6 +52,7 @@ export type LocaleKey =
   | "emoji_group_weibo"
   | "emoji_group_bilibili"
   | "emoji_group_douyin"
+  | "turnstile_required"
 
 export const zhCN: Record<LocaleKey, string> = {
   placeholder_nick: "昵称 *",
@@ -101,7 +102,8 @@ export const zhCN: Record<LocaleKey, string> = {
   emoji_group_qq: "QQ",
   emoji_group_weibo: "微博",
   emoji_group_bilibili: "B站",
-  emoji_group_douyin: "抖音"
+  emoji_group_douyin: "抖音",
+  turnstile_required: "请先完成人机验证"
 }
 
 export const enUS: Record<LocaleKey, string> = {
@@ -152,7 +154,8 @@ export const enUS: Record<LocaleKey, string> = {
   emoji_group_qq: "QQ",
   emoji_group_weibo: "Weibo",
   emoji_group_bilibili: "Bilibili",
-  emoji_group_douyin: "Douyin"
+  emoji_group_douyin: "Douyin",
+  turnstile_required: "Please complete human verification"
 }
 
 export type SupportedLang = "zh-CN" | "en"

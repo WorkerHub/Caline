@@ -28,6 +28,10 @@ export interface CalineInitOptions {
   lang?: string
   pageSize?: number
   wordLimit?: number
+  turnstile?: {
+    enabled?: boolean
+    siteKey?: string
+  }
 }
 
 export class CalineWidget {
@@ -48,6 +52,13 @@ export class CalineWidget {
     comment: { id: number; nick: string }
     rootId: number
   } | null = null
+  private turnstileConfig: { enabled: boolean; siteKey: string } = {
+    enabled: false,
+    siteKey: ""
+  }
+  private initialTurnstileOptions?: { enabled?: boolean; siteKey?: string }
+  private mainEditorEl: HTMLElement | null = null
+  private replyEditorEl: HTMLElement | null = null
 
   private editorContainer!: HTMLElement
   private treeContainer!: HTMLElement
@@ -102,9 +113,84 @@ export class CalineWidget {
     this.t = createTranslator(lang)
     this.client = new CalineApiClient(this.serverUrl)
 
+    this.initialTurnstileOptions = options.turnstile
+    if (options.turnstile) {
+      this.turnstileConfig = {
+        enabled: Boolean(
+          options.turnstile.enabled && options.turnstile.siteKey
+        ),
+        siteKey: (options.turnstile.siteKey || "").trim()
+      }
+    }
+
     this.renderSkeleton()
     void this.checkAuth()
+    void this.loadPublicConfig()
     this.loadComments()
+  }
+
+  private async loadPublicConfig(): Promise<void> {
+    try {
+      const config = await this.client.getPublicConfig()
+      // 若服务端公开端点明确下发了 turnstile 状态，以服务端契约为准
+      if (typeof config?.turnstileEnabled === "boolean") {
+        const siteKey =
+          typeof config.turnstileSiteKey === "string"
+            ? config.turnstileSiteKey.trim()
+            : ""
+        const enabled = config.turnstileEnabled && siteKey.length > 0
+
+        const changed =
+          this.turnstileConfig.enabled !== enabled ||
+          this.turnstileConfig.siteKey !== siteKey
+
+        if (changed) {
+          this.turnstileConfig = { enabled, siteKey }
+          if (!this.currentUser) {
+            this.renderMainEditor()
+            if (this.currentReplyTarget) {
+              this.showReplyEditor(
+                this.currentReplyTarget.comment,
+                this.currentReplyTarget.rootId
+              )
+            }
+          }
+        }
+      } else if (this.initialTurnstileOptions) {
+        // 服务端端点缺省相关字段时，回退并保留调用方显式配置，不被置空冲刷
+        const enabled = Boolean(
+          this.initialTurnstileOptions.enabled &&
+            this.initialTurnstileOptions.siteKey
+        )
+        const siteKey = (this.initialTurnstileOptions.siteKey || "").trim()
+        const changed =
+          this.turnstileConfig.enabled !== enabled ||
+          this.turnstileConfig.siteKey !== siteKey
+
+        if (changed) {
+          this.turnstileConfig = { enabled, siteKey }
+          if (!this.currentUser) {
+            this.renderMainEditor()
+            if (this.currentReplyTarget) {
+              this.showReplyEditor(
+                this.currentReplyTarget.comment,
+                this.currentReplyTarget.rootId
+              )
+            }
+          }
+        }
+      }
+    } catch {
+      // 异常时保留调用方显式配置
+      if (this.initialTurnstileOptions) {
+        const enabled = Boolean(
+          this.initialTurnstileOptions.enabled &&
+            this.initialTurnstileOptions.siteKey
+        )
+        const siteKey = (this.initialTurnstileOptions.siteKey || "").trim()
+        this.turnstileConfig = { enabled, siteKey }
+      }
+    }
   }
 
   private renderSkeleton() {
@@ -216,12 +302,22 @@ export class CalineWidget {
   }
 
   private renderMainEditor() {
+    if (this.mainEditorEl) {
+      const elWithCleanup = this.mainEditorEl as HTMLElement & {
+        cleanup?: () => void
+      }
+      if (typeof elWithCleanup.cleanup === "function") {
+        elWithCleanup.cleanup()
+      }
+      this.mainEditorEl = null
+    }
     this.editorContainer.innerHTML = ""
     const editor = createEditor({
       t: this.t,
       wordLimit: this.wordLimit,
       serverUrl: this.serverUrl,
       user: this.currentUser,
+      turnstile: this.turnstileConfig,
       onLogout: () => this.handleLogout(),
       onLoginSuccess: () => this.checkAuth(),
       onUpload: (file, turnstileToken) =>
@@ -233,6 +329,7 @@ export class CalineWidget {
           nick?: string
           mail?: string
           link?: string
+          turnstileToken?: string
         } = {
           url: this.path,
           content: data.content
@@ -240,6 +337,7 @@ export class CalineWidget {
         if (data.nick) payload.nick = data.nick
         if (data.mail) payload.mail = data.mail
         if (data.link) payload.link = data.link
+        if (data.turnstileToken) payload.turnstileToken = data.turnstileToken
 
         const res = await this.client.createComment(payload)
 
@@ -253,6 +351,7 @@ export class CalineWidget {
         await this.loadComments(true)
       }
     })
+    this.mainEditorEl = editor
     this.editorContainer.appendChild(editor)
   }
 
@@ -321,6 +420,16 @@ export class CalineWidget {
   ) {
     this.currentReplyTarget = { comment, rootId }
 
+    if (this.replyEditorEl) {
+      const elWithCleanup = this.replyEditorEl as HTMLElement & {
+        cleanup?: () => void
+      }
+      if (typeof elWithCleanup.cleanup === "function") {
+        elWithCleanup.cleanup()
+      }
+      this.replyEditorEl = null
+    }
+
     // 移除已有回复框
     const existing = this.treeContainer.querySelector(".cl-reply-editor-slot")
     if (existing) existing.remove()
@@ -339,6 +448,7 @@ export class CalineWidget {
       wordLimit: this.wordLimit,
       serverUrl: this.serverUrl,
       user: this.currentUser,
+      turnstile: this.turnstileConfig,
       onLogout: () => this.handleLogout(),
       onLoginSuccess: () => this.checkAuth(),
       onUpload: (file, turnstileToken) =>
@@ -346,6 +456,15 @@ export class CalineWidget {
       replyTarget: {
         nick: comment.nick || this.t("guest"),
         onCancel: () => {
+          if (this.replyEditorEl) {
+            const elWithCleanup = this.replyEditorEl as HTMLElement & {
+              cleanup?: () => void
+            }
+            if (typeof elWithCleanup.cleanup === "function") {
+              elWithCleanup.cleanup()
+            }
+            this.replyEditorEl = null
+          }
           this.currentReplyTarget = null
           replySlot.remove()
         }
@@ -359,6 +478,7 @@ export class CalineWidget {
           nick?: string
           mail?: string
           link?: string
+          turnstileToken?: string
         } = {
           url: this.path,
           content: data.content,
@@ -368,6 +488,7 @@ export class CalineWidget {
         if (data.nick) payload.nick = data.nick
         if (data.mail) payload.mail = data.mail
         if (data.link) payload.link = data.link
+        if (data.turnstileToken) payload.turnstileToken = data.turnstileToken
 
         const res = await this.client.createComment(payload)
 
@@ -375,6 +496,15 @@ export class CalineWidget {
           saveEditToken(res.comment.id, res.editToken)
         }
 
+        if (this.replyEditorEl) {
+          const elWithCleanup = this.replyEditorEl as HTMLElement & {
+            cleanup?: () => void
+          }
+          if (typeof elWithCleanup.cleanup === "function") {
+            elWithCleanup.cleanup()
+          }
+          this.replyEditorEl = null
+        }
         this.currentReplyTarget = null
         replySlot.remove()
         this.currentPage = 1
@@ -382,6 +512,7 @@ export class CalineWidget {
       }
     })
 
+    this.replyEditorEl = editor
     replySlot.appendChild(editor)
     const contentWrap = targetEl.querySelector(".cl-content-wrap")
     if (contentWrap) {
