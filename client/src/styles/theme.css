@@ -72,6 +72,7 @@
 
 /* 编辑器部分 */
 .cl-editor-container {
+  position: relative;
   border: 1px solid var(--cl-color-border);
   border-radius: var(--cl-radius);
   background-color: var(--cl-color-bg);
@@ -294,6 +295,10 @@
 
 /* 表情弹窗 */
 .cl-emoji-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   padding: 8px;
@@ -301,8 +306,10 @@
   border-radius: var(--cl-radius);
   background: var(--cl-color-bg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  margin-top: 8px;
+  margin-top: 4px;
   max-width: 360px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .cl-emoji-tabs {

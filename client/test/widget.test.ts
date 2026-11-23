@@ -1999,6 +1999,45 @@ Reply to @alice and @bob
         editor.remove()
       })
 
+      it("styles emoji panel as floating overlay with absolute positioning, zero layout shift context, and viewport boundary safety", () => {
+        const cssPath = path.resolve(
+          import.meta.dirname,
+          "../src/styles/theme.css"
+        )
+        const css = fs.readFileSync(cssPath, "utf8")
+
+        // 1. 编辑器容器具备相对定位上下文（定位基准）
+        expect(css).toMatch(
+          /\.cl-editor-container\s*\{[^}]*position:\s*relative/s
+        )
+
+        // 2. 表情面板绝对定位浮层，top 100% 悬浮于工具条下方，层级高于正文
+        expect(css).toMatch(/\.cl-emoji-panel\s*\{[^}]*position:\s*absolute/s)
+        expect(css).toMatch(/\.cl-emoji-panel\s*\{[^}]*top:\s*100%/s)
+        expect(css).toMatch(/\.cl-emoji-panel\s*\{[^}]*z-index:\s*10/s)
+
+        // 3. 窄屏与视口边界安全性：box-sizing、width 100% 与 max-width 约束
+        expect(css).toMatch(/\.cl-emoji-panel\s*\{[^}]*max-width:\s*360px/s)
+        expect(css).toMatch(/\.cl-emoji-panel\s*\{[^}]*width:\s*100%/s)
+        expect(css).toMatch(
+          /\.cl-emoji-panel\s*\{[^}]*box-sizing:\s*border-box/s
+        )
+
+        // 4. 卡片视觉风格沿用：边框、圆角、背景、阴影
+        expect(css).toMatch(
+          /\.cl-emoji-panel\s*\{[^}]*border:\s*1px\s+solid\s+var\(--cl-color-border\)/s
+        )
+        expect(css).toMatch(
+          /\.cl-emoji-panel\s*\{[^}]*border-radius:\s*var\(--cl-radius\)/s
+        )
+        expect(css).toMatch(
+          /\.cl-emoji-panel\s*\{[^}]*background:\s*var\(--cl-color-bg\)/s
+        )
+        expect(css).toMatch(
+          /\.cl-emoji-panel\s*\{[^}]*box-shadow:\s*0\s+4px\s+12px/s
+        )
+      })
+
       it("lazy loads manifest on switching to qq group and inserts shortcode :qq_name:", async () => {
         const t = createTranslator("zh-CN")
         const fetchMock = vi.fn().mockImplementation((url: string) => {
