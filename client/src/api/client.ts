@@ -197,4 +197,20 @@ export class CalineApiClient {
       method: "POST"
     })
   }
+
+  // 12. 上传图片 (POST /api/upload)
+  async uploadImage(
+    file: File,
+    turnstileToken?: string
+  ): Promise<{ url: string }> {
+    const formData = new FormData()
+    formData.append("file", file)
+    if (turnstileToken) {
+      formData.append("turnstileToken", turnstileToken)
+    }
+    return this.request<{ url: string }>("/api/upload", {
+      method: "POST",
+      body: formData
+    })
+  }
 }

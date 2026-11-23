@@ -19,6 +19,9 @@ import { commentCount, pageview, reaction } from "./widgets/counters"
 import { recentComments } from "./widgets/recent"
 import "./styles/theme.css"
 
+export const CALINE_VERSION =
+  typeof __CALINE_VERSION__ !== "undefined" ? __CALINE_VERSION__ : "0.1.0"
+
 export interface CalineInitOptions {
   el?: string | HTMLElement
   serverURL?: string
@@ -121,6 +124,9 @@ export class CalineWidget {
       <div class="cl-load-more-wrap" style="display:none;">
         <button type="button" class="cl-btn cl-btn-secondary cl-btn-load-more">${this.t("load_more")}</button>
       </div>
+      <div class="cl-footer">
+        Powered by <a href="https://github.com/WorkerHub/Caline" target="_blank" rel="noopener" class="cl-footer-link">Caline</a> v${CALINE_VERSION}
+      </div>
     `
 
     this.editorContainer = this.container.querySelector(
@@ -218,6 +224,8 @@ export class CalineWidget {
       serverUrl: this.serverUrl,
       user: this.currentUser,
       onLogout: () => this.handleLogout(),
+      onLoginSuccess: () => this.checkAuth(),
+      onUpload: (file) => this.client.uploadImage(file),
       onSubmit: async (data) => {
         const payload: {
           url: string
@@ -332,6 +340,8 @@ export class CalineWidget {
       serverUrl: this.serverUrl,
       user: this.currentUser,
       onLogout: () => this.handleLogout(),
+      onLoginSuccess: () => this.checkAuth(),
+      onUpload: (file) => this.client.uploadImage(file),
       replyTarget: {
         nick: comment.nick || this.t("guest"),
         onCancel: () => {

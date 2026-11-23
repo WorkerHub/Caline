@@ -17,11 +17,19 @@ import { renderCommentTree } from "../src/components/comment-tree"
 import { createEditor } from "../src/components/editor"
 import {
   Caline,
+  CALINE_VERSION,
   init,
   autoInit,
   scheduleAutoInit,
   type CalineInitOptions
 } from "../src/index"
+import { openLoginPopup } from "../src/utils/popup"
+import {
+  EMOJI_GROUPS,
+  clearEmojiCache,
+  fetchEmojiManifest,
+  resolveEmojiImageUrl
+} from "../src/utils/emoji"
 
 describe("Caline Client Widget", () => {
   beforeEach(() => {
@@ -1299,6 +1307,538 @@ Reply to @alice and @bob
         expect(replyCommentPayload).not.toHaveProperty("nick")
         expect(replyCommentPayload).not.toHaveProperty("mail")
         expect(replyCommentPayload).not.toHaveProperty("link")
+      })
+    })
+  })
+
+  describe("Alignment features: Footer, Login Popup, Toolbar Icons, Upload & Emoji Groups", () => {
+    beforeEach(() => {
+      clearEmojiCache()
+    })
+
+    describe("Footer (Powered by Caline v<version>)", () => {
+      it("renders right-aligned footer with Caline link and injected version", () => {
+        document.body.innerHTML = '<div id="caline"></div>'
+        window.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: { items: [], total: 0, page: 1, pageSize: 10, totalPages: 0 }
+          })
+        }) as unknown as typeof fetch
+
+        init({ el: "#caline", serverURL: "https://example.com" })
+
+        const container = document.querySelector("#caline")!
+        const footer = container.querySelector(".cl-footer")
+        expect(footer).not.toBeNull()
+
+        // 验证弱化文案与版本号
+        expect(footer?.textContent).toContain(
+          `Powered by Caline v${CALINE_VERSION}`
+        )
+
+        // 验证 Caline 仓库链接与安全属性
+        const link = footer?.querySelector(
+          "a.cl-footer-link"
+        ) as HTMLAnchorElement
+        expect(link).not.toBeNull()
+        expect(link.href).toBe("https://github.com/WorkerHub/Caline")
+        expect(link.target).toBe("_blank")
+        expect(link.rel).toBe("noopener")
+        expect(link.textContent).toBe("Caline")
+      })
+    })
+
+    describe("Login popup & fallback handling", () => {
+      it("opens centered 480x640 popup with menubar/toolbar disabled", () => {
+        const mockPopup = { closed: false } as Window
+        const openSpy = vi.spyOn(window, "open").mockReturnValue(mockPopup)
+        const onAuthRefresh = vi.fn()
+
+        openLoginPopup({
+          serverUrl: "https://caline.example.com",
+          onAuthRefresh
+        })
+
+        expect(openSpy).toHaveBeenCalledWith(
+          "https://caline.example.com/ui/login?popup=1",
+          "caline-login",
+          expect.stringContaining("width=480,height=640")
+        )
+        const featuresArg = openSpy.mock.calls[0][2] as string
+        expect(featuresArg).toContain("menubar=no")
+        expect(featuresArg).toContain("toolbar=no")
+        expect(featuresArg).toContain("location=no")
+        expect(featuresArg).toContain("status=no")
+      })
+
+      it("falls back to standard new tab when popup is blocked or fails to open", () => {
+        const openSpy = vi.spyOn(window, "open")
+        // 第一次调用返回 null（模拟弹窗拦截）
+        openSpy.mockReturnValueOnce(null)
+
+        const onAuthRefresh = vi.fn()
+        const popup = openLoginPopup({
+          serverUrl: "https://caline.example.com",
+          onAuthRefresh
+        })
+
+        expect(popup).toBeNull()
+        // 验证回落为普通新标签打开 /ui/login
+        expect(openSpy).toHaveBeenCalledTimes(2)
+        expect(openSpy).toHaveBeenLastCalledWith(
+          "https://caline.example.com/ui/login",
+          "_blank",
+          "noopener"
+        )
+      })
+
+      it("triggers auth refresh when popup is closed via polling", async () => {
+        vi.useFakeTimers()
+        const mockPopup = { closed: false } as Window
+        vi.spyOn(window, "open").mockReturnValue(mockPopup)
+        const onAuthRefresh = vi.fn()
+
+        openLoginPopup({
+          serverUrl: "https://caline.example.com",
+          onAuthRefresh
+        })
+
+        expect(onAuthRefresh).not.toHaveBeenCalled()
+
+        // 模拟用户在弹窗中完成登录并关闭了弹窗
+        ;(mockPopup as { closed: boolean }).closed = true
+        vi.advanceTimersByTime(600)
+
+        expect(onAuthRefresh).toHaveBeenCalledTimes(1)
+        vi.useRealTimers()
+      })
+
+      it("triggers auth refresh on window postMessage from valid origin", async () => {
+        const mockPopup = { closed: false } as Window
+        vi.spyOn(window, "open").mockReturnValue(mockPopup)
+        const onAuthRefresh = vi.fn()
+
+        openLoginPopup({
+          serverUrl: "https://caline.example.com",
+          onAuthRefresh
+        })
+
+        // 派发来自非匹配 origin 的消息（例如恶意站点）
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: { type: "LOGIN_SUCCESS" },
+            origin: "https://evil.com"
+          })
+        )
+        expect(onAuthRefresh).not.toHaveBeenCalled()
+
+        // 派发来自 serverURL origin 的合法消息
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: { type: "LOGIN_SUCCESS" },
+            origin: "https://caline.example.com"
+          })
+        )
+        expect(onAuthRefresh).toHaveBeenCalledTimes(1)
+      })
+
+      it("triggers login popup from guest prompt and guest-disabled notice links", () => {
+        const openSpy = vi
+          .spyOn(window, "open")
+          .mockReturnValue({ closed: false } as Window)
+        const t = createTranslator("zh-CN")
+
+        // 1. 访客态表单中的登录入口
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onSubmit: vi.fn()
+        })
+        const guestLoginLink = editor.querySelector(
+          ".cl-editor-login-prompt"
+        ) as HTMLAnchorElement
+        expect(guestLoginLink).not.toBeNull()
+        guestLoginLink.click()
+
+        expect(openSpy).toHaveBeenCalledWith(
+          "https://example.com/ui/login?popup=1",
+          "caline-login",
+          expect.stringContaining("width=480,height=640")
+        )
+
+        // 2. 访客关闭态的登录入口
+        const closedEditor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          isGuestDisabled: true,
+          onSubmit: vi.fn()
+        })
+        const closedLoginLink = closedEditor.querySelector(
+          ".cl-login-link"
+        ) as HTMLAnchorElement
+        expect(closedLoginLink).not.toBeNull()
+        closedLoginLink.click()
+
+        expect(openSpy).toHaveBeenCalledWith(
+          "https://example.com/ui/login?popup=1",
+          "caline-login",
+          expect.stringContaining("width=480,height=640")
+        )
+      })
+    })
+
+    describe("Toolbar iconification & preview toggle", () => {
+      it("renders magnifying glass SVG for preview toggle and image icon for upload", () => {
+        const t = createTranslator("zh-CN")
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onSubmit: vi.fn()
+        })
+
+        // 预览按钮检查
+        const previewBtn = editor.querySelector(
+          ".cl-tool-btn-preview"
+        ) as HTMLButtonElement
+        expect(previewBtn).not.toBeNull()
+        expect(previewBtn.querySelector("svg")).not.toBeNull()
+        expect(previewBtn.title).toBe("预览")
+        expect(previewBtn.getAttribute("aria-label")).toBe("预览")
+
+        // 图片按钮检查
+        const imageBtn = editor.querySelector(
+          ".cl-tool-btn-image"
+        ) as HTMLButtonElement
+        expect(imageBtn).not.toBeNull()
+        expect(imageBtn.querySelector("svg")).not.toBeNull()
+        expect(imageBtn.title).toBe("插入图片")
+        expect(imageBtn.getAttribute("aria-label")).toBe("插入图片")
+
+        // Emoji 按钮检查
+        const emojiBtn = editor.querySelector(
+          ".cl-tool-btn"
+        ) as HTMLButtonElement
+        expect(emojiBtn.textContent).toBe("😀")
+        expect(emojiBtn.title).toBe("表情")
+        expect(emojiBtn.getAttribute("aria-label")).toBe("表情")
+
+        // 预览切换功能保持一致
+        const textarea = editor.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
+        const previewBox = editor.querySelector(
+          ".cl-editor-preview"
+        ) as HTMLElement
+        textarea.value = "**Bold**"
+
+        previewBtn.click()
+        expect(previewBox.style.display).toBe("block")
+        expect(textarea.style.display).toBe("none")
+        expect(previewBtn.classList.contains("active")).toBe(true)
+        expect(previewBox.innerHTML).toContain("<strong>Bold</strong>")
+
+        previewBtn.click()
+        expect(previewBox.style.display).toBe("none")
+        expect(textarea.style.display).toBe("block")
+        expect(previewBtn.classList.contains("active")).toBe(false)
+      })
+    })
+
+    describe("Image upload (file picker & paste, progress state and error recovery)", () => {
+      it("uploads selected file and inserts ![](absoluteUrl) at cursor", async () => {
+        const t = createTranslator("zh-CN")
+        const uploadMock = vi
+          .fn()
+          .mockResolvedValue({ url: "/img/photo_123.jpg" })
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onUpload: uploadMock,
+          onSubmit: vi.fn()
+        })
+
+        const textarea = editor.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
+        textarea.value = "Prefix text "
+        textarea.selectionStart = textarea.selectionEnd = 12
+
+        const fileInput = editor.querySelector(
+          'input[type="file"]'
+        ) as HTMLInputElement
+        const dummyFile = new File(["dummy content"], "photo.jpg", {
+          type: "image/jpeg"
+        })
+
+        // 模拟选择文件
+        Object.defineProperty(fileInput, "files", {
+          value: [dummyFile],
+          configurable: true
+        })
+        fileInput.dispatchEvent(new Event("change"))
+
+        await vi.waitFor(() => {
+          expect(uploadMock).toHaveBeenCalledWith(dummyFile)
+        })
+
+        await vi.waitFor(() => {
+          expect(textarea.value).toBe(
+            "Prefix text ![](https://example.com/img/photo_123.jpg)"
+          )
+        })
+      })
+
+      it("handles paste image event on textarea and inserts markdown", async () => {
+        const t = createTranslator("zh-CN")
+        const uploadMock = vi
+          .fn()
+          .mockResolvedValue({ url: "https://cdn.example.com/img/pasted.png" })
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onUpload: uploadMock,
+          onSubmit: vi.fn()
+        })
+
+        const textarea = editor.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
+        textarea.value = "Before "
+        textarea.selectionStart = textarea.selectionEnd = 7
+
+        const dummyFile = new File(["pasted"], "image.png", {
+          type: "image/png"
+        })
+        const clipboardEvent = new Event("paste") as unknown as ClipboardEvent
+        Object.defineProperty(clipboardEvent, "clipboardData", {
+          value: {
+            items: [
+              {
+                type: "image/png",
+                getAsFile: () => dummyFile
+              }
+            ]
+          }
+        })
+
+        textarea.dispatchEvent(clipboardEvent)
+
+        await vi.waitFor(() => {
+          expect(uploadMock).toHaveBeenCalledWith(dummyFile)
+        })
+
+        await vi.waitFor(() => {
+          expect(textarea.value).toBe(
+            "Before ![](https://cdn.example.com/img/pasted.png)"
+          )
+        })
+      })
+
+      it("displays error in editor and preserves input content on upload failure", async () => {
+        const t = createTranslator("zh-CN")
+        const uploadMock = vi
+          .fn()
+          .mockRejectedValue(new Error("File size exceeds 5MB"))
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onUpload: uploadMock,
+          onSubmit: vi.fn()
+        })
+
+        const textarea = editor.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
+        const originalContent =
+          "Important drafted content that must never be lost"
+        textarea.value = originalContent
+
+        const fileInput = editor.querySelector(
+          'input[type="file"]'
+        ) as HTMLInputElement
+        const dummyFile = new File(["too big"], "large.png", {
+          type: "image/png"
+        })
+        Object.defineProperty(fileInput, "files", {
+          value: [dummyFile],
+          configurable: true
+        })
+        fileInput.dispatchEvent(new Event("change"))
+
+        const statusEl = editor.querySelector(
+          ".cl-upload-status"
+        ) as HTMLElement
+
+        await vi.waitFor(() => {
+          expect(statusEl.textContent).toBe("File size exceeds 5MB")
+          expect(statusEl.classList.contains("error")).toBe(true)
+        })
+
+        // 验证用户已写文字绝对不丢失
+        expect(textarea.value).toBe(originalContent)
+      })
+    })
+
+    describe("Emoji panel: grouping, manifest lazy loading & insertion", () => {
+      it("defines 4 emoji groups and fetchEmojiManifest loads manifest with caching", async () => {
+        expect(EMOJI_GROUPS.length).toBe(4)
+        expect(EMOJI_GROUPS.map((g) => g.id)).toEqual([
+          "default",
+          "qq",
+          "weibo",
+          "bilibili"
+        ])
+
+        const fetchSpy = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ test: "test.png" })
+        })
+        window.fetch = fetchSpy as unknown as typeof fetch
+
+        const manifest1 = await fetchEmojiManifest(
+          "https://example.com",
+          "weibo"
+        )
+        expect(manifest1).toEqual({ test: "test.png" })
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+        // 再次获取命中缓存
+        const manifest2 = await fetchEmojiManifest(
+          "https://example.com",
+          "weibo"
+        )
+        expect(manifest2).toEqual({ test: "test.png" })
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+      })
+
+      it("renders Unicode base set in default group and inserts emoji", () => {
+        const t = createTranslator("zh-CN")
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onSubmit: vi.fn()
+        })
+
+        const textarea = editor.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
+        const emojiToggle = editor.querySelector(
+          ".cl-tool-btn"
+        ) as HTMLButtonElement
+        const emojiPanel = editor.querySelector(
+          ".cl-emoji-panel"
+        ) as HTMLElement
+
+        // 打开面板
+        emojiToggle.click()
+        expect(emojiPanel.style.display).toBe("flex")
+
+        // 验证 tabs 一行展示
+        const tabs = emojiPanel.querySelectorAll(".cl-emoji-tab")
+        expect(tabs.length).toBe(4)
+        expect(tabs[0].textContent).toBe("默认")
+        expect(tabs[1].textContent).toBe("QQ")
+        expect(tabs[2].textContent).toBe("微博")
+        expect(tabs[3].textContent).toBe("B站")
+
+        // 验证默认分组激活
+        expect(tabs[0].classList.contains("active")).toBe(true)
+
+        // 验证渲染 Unicode 按钮并插入
+        const unicodeBtns = emojiPanel.querySelectorAll(".cl-emoji-btn")
+        expect(unicodeBtns.length).toBeGreaterThan(10)
+        ;(unicodeBtns[0] as HTMLButtonElement).click()
+        expect(textarea.value).toBe("😀")
+      })
+
+      it("lazy loads manifest on switching to qq group and inserts ![](imageUrl)", async () => {
+        const t = createTranslator("zh-CN")
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+          if (url.includes("/emoji/qq/manifest.json")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                doge: "doge.png",
+                cool: "cool.gif"
+              })
+            })
+          }
+          return Promise.resolve({ ok: false, status: 404 })
+        })
+        window.fetch = fetchMock as unknown as typeof fetch
+
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onSubmit: vi.fn()
+        })
+
+        const textarea = editor.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
+        const emojiToggle = editor.querySelector(
+          ".cl-tool-btn"
+        ) as HTMLButtonElement
+        emojiToggle.click()
+
+        const emojiPanel = editor.querySelector(
+          ".cl-emoji-panel"
+        ) as HTMLElement
+        const qqTab = emojiPanel.querySelector(
+          '.cl-emoji-tab[data-group="qq"]'
+        ) as HTMLButtonElement
+        expect(qqTab).not.toBeNull()
+
+        // 切换到 QQ 分组
+        qqTab.click()
+
+        await vi.waitFor(() => {
+          expect(fetchMock).toHaveBeenCalledWith(
+            "https://example.com/emoji/qq/manifest.json"
+          )
+        })
+
+        await vi.waitFor(() => {
+          const imgBtns = emojiPanel.querySelectorAll(".cl-emoji-img-btn")
+          expect(imgBtns.length).toBe(2)
+        })
+
+        const dogeBtn = emojiPanel.querySelector(
+          '.cl-emoji-img-btn[title="doge"]'
+        ) as HTMLButtonElement
+        expect(dogeBtn).not.toBeNull()
+        const img = dogeBtn.querySelector("img") as HTMLImageElement
+        expect(img.src).toBe("https://example.com/emoji/qq/doge.png")
+
+        // 点击插入 markdown 语法
+        dogeBtn.click()
+        expect(textarea.value).toBe(
+          "![](https://example.com/emoji/qq/doge.png)"
+        )
+      })
+
+      it("resolveEmojiImageUrl resolves relative, root-relative, and absolute URLs correctly", () => {
+        expect(
+          resolveEmojiImageUrl("https://example.com", "weibo", "smile.png")
+        ).toBe("https://example.com/emoji/weibo/smile.png")
+        expect(
+          resolveEmojiImageUrl(
+            "https://example.com",
+            "weibo",
+            "/custom/smile.png"
+          )
+        ).toBe("https://example.com/custom/smile.png")
+        expect(
+          resolveEmojiImageUrl(
+            "https://example.com",
+            "weibo",
+            "https://cdn.example.com/smile.png"
+          )
+        ).toBe("https://cdn.example.com/smile.png")
       })
     })
   })

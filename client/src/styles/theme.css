@@ -202,11 +202,17 @@
   background: none;
   border: 1px solid var(--cl-color-border);
   border-radius: var(--cl-radius);
-  padding: 4px 8px;
+  padding: 4px 6px;
+  min-width: 28px;
+  height: 28px;
   font-size: var(--cl-font-size-sm);
   color: var(--cl-color-text-muted);
   cursor: pointer;
   transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .cl-tool-btn:hover {
@@ -218,6 +224,23 @@
   background-color: var(--cl-color-primary);
   color: #fff;
   border-color: var(--cl-color-primary);
+}
+
+.cl-icon {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+  display: block;
+}
+
+.cl-upload-status {
+  font-size: var(--cl-font-size-sm);
+  color: var(--cl-color-text-muted);
+}
+
+.cl-upload-status.error {
+  color: var(--cl-color-danger);
+  font-weight: 500;
 }
 
 .cl-word-limit {
@@ -271,16 +294,55 @@
 
 /* 表情弹窗 */
 .cl-emoji-panel {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
   padding: 8px;
   border: 1px solid var(--cl-color-border);
   border-radius: var(--cl-radius);
   background: var(--cl-color-bg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   margin-top: 8px;
-  max-width: 320px;
+  max-width: 360px;
+}
+
+.cl-emoji-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--cl-color-border);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  overflow-x: auto;
+}
+
+.cl-emoji-tab {
+  background: none;
+  border: none;
+  font-size: var(--cl-font-size-sm);
+  color: var(--cl-color-text-muted);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.cl-emoji-tab:hover {
+  color: var(--cl-color-text);
+}
+
+.cl-emoji-tab.active {
+  background-color: var(--cl-color-card);
+  color: var(--cl-color-primary);
+  font-weight: 600;
+}
+
+.cl-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .cl-emoji-btn {
@@ -290,10 +352,36 @@
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .cl-emoji-btn:hover {
   background-color: var(--cl-color-card);
+}
+
+.cl-emoji-img-btn {
+  padding: 2px;
+}
+
+.cl-emoji-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
+}
+
+.cl-emoji-loading,
+.cl-emoji-error {
+  text-align: center;
+  padding: 16px 8px;
+  font-size: var(--cl-font-size-sm);
+  color: var(--cl-color-text-muted);
+}
+
+.cl-emoji-error {
+  color: var(--cl-color-danger);
 }
 
 /* 顶部信息栏与排序栏 */
@@ -509,4 +597,27 @@
   color: var(--cl-color-primary);
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* 页脚：Powered by Caline v<版本> 右对齐弱化小字 */
+.cl-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+  font-size: var(--cl-font-size-sm);
+  color: var(--cl-color-text-muted);
+}
+
+.cl-footer-link {
+  color: var(--cl-color-text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.cl-footer-link:hover {
+  color: var(--cl-color-primary);
+  text-decoration: underline;
 }
