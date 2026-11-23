@@ -831,6 +831,32 @@ Reply to @alice and @bob
           })
         )
       })
+
+      it("uploadImage sends multipart file and optionally appends turnstileToken", async () => {
+        const client = new CalineApiClient("https://example.com")
+        let requestBody: FormData | null = null
+        window.fetch = vi
+          .fn()
+          .mockImplementation((_url: string, init?: RequestInit) => {
+            requestBody = init?.body as FormData
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ data: { url: "/img/uploaded.png" } })
+            })
+          }) as unknown as typeof fetch
+
+        const dummyFile = new File(["dummy"], "photo.png", {
+          type: "image/png"
+        })
+        const res = await client.uploadImage(dummyFile, "turnstile_token_123")
+        expect(res.url).toBe("/img/uploaded.png")
+        expect(requestBody).not.toBeNull()
+        expect((requestBody as unknown as FormData).get("file")).toBe(dummyFile)
+        expect((requestBody as unknown as FormData).get("turnstileToken")).toBe(
+          "turnstile_token_123"
+        )
+      })
     })
 
     describe("CalineWidget end-to-end auth state flow", () => {

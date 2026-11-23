@@ -29,7 +29,7 @@ export interface EditorProps {
   user?: AuthMe | null
   onLogout?: () => Promise<void> | void
   onLoginSuccess?: () => unknown
-  onUpload?: (file: File) => Promise<{ url: string }>
+  onUpload?: (file: File, turnstileToken?: string) => Promise<{ url: string }>
   onSubmit: (data: {
     nick?: string
     mail?: string
@@ -329,7 +329,7 @@ export function createEditor(props: EditorProps): HTMLElement {
   imageBtn.setAttribute("aria-label", props.t("btn_image"))
   imageBtn.innerHTML = ICON_IMAGE
 
-  async function handleUpload(file: File) {
+  async function handleUpload(file: File, turnstileToken?: string) {
     imageBtn.disabled = true
     uploadStatusEl.style.display = "inline"
     uploadStatusEl.classList.remove("error")
@@ -338,11 +338,17 @@ export function createEditor(props: EditorProps): HTMLElement {
     try {
       let resUrl = ""
       if (props.onUpload) {
-        const res = await props.onUpload(file)
+        const res =
+          turnstileToken !== undefined
+            ? await props.onUpload(file, turnstileToken)
+            : await props.onUpload(file)
         resUrl = res.url
       } else {
         const client = new CalineApiClient(props.serverUrl)
-        const res = await client.uploadImage(file)
+        const res =
+          turnstileToken !== undefined
+            ? await client.uploadImage(file, turnstileToken)
+            : await client.uploadImage(file)
         resUrl = res.url
       }
 

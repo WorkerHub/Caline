@@ -51,7 +51,6 @@ export type LocaleKey =
   | "emoji_group_qq"
   | "emoji_group_weibo"
   | "emoji_group_bilibili"
-  | "login_popup_blocked"
 
 export const zhCN: Record<LocaleKey, string> = {
   placeholder_nick: "昵称 *",
@@ -100,8 +99,7 @@ export const zhCN: Record<LocaleKey, string> = {
   emoji_group_default: "默认",
   emoji_group_qq: "QQ",
   emoji_group_weibo: "微博",
-  emoji_group_bilibili: "B站",
-  login_popup_blocked: "登录弹窗被拦截，已在新标签页打开"
+  emoji_group_bilibili: "B站"
 }
 
 export const enUS: Record<LocaleKey, string> = {
@@ -151,8 +149,7 @@ export const enUS: Record<LocaleKey, string> = {
   emoji_group_default: "Default",
   emoji_group_qq: "QQ",
   emoji_group_weibo: "Weibo",
-  emoji_group_bilibili: "Bilibili",
-  login_popup_blocked: "Login popup was blocked, opened in a new tab"
+  emoji_group_bilibili: "Bilibili"
 }
 
 export type SupportedLang = "zh-CN" | "en"

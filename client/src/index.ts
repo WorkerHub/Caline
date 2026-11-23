@@ -19,8 +19,7 @@ import { commentCount, pageview, reaction } from "./widgets/counters"
 import { recentComments } from "./widgets/recent"
 import "./styles/theme.css"
 
-export const CALINE_VERSION =
-  typeof __CALINE_VERSION__ !== "undefined" ? __CALINE_VERSION__ : "0.1.0"
+export const CALINE_VERSION = __CALINE_VERSION__
 
 export interface CalineInitOptions {
   el?: string | HTMLElement
@@ -225,7 +224,8 @@ export class CalineWidget {
       user: this.currentUser,
       onLogout: () => this.handleLogout(),
       onLoginSuccess: () => this.checkAuth(),
-      onUpload: (file) => this.client.uploadImage(file),
+      onUpload: (file, turnstileToken) =>
+        this.client.uploadImage(file, turnstileToken),
       onSubmit: async (data) => {
         const payload: {
           url: string
@@ -341,7 +341,8 @@ export class CalineWidget {
       user: this.currentUser,
       onLogout: () => this.handleLogout(),
       onLoginSuccess: () => this.checkAuth(),
-      onUpload: (file) => this.client.uploadImage(file),
+      onUpload: (file, turnstileToken) =>
+        this.client.uploadImage(file, turnstileToken),
       replyTarget: {
         nick: comment.nick || this.t("guest"),
         onCancel: () => {
