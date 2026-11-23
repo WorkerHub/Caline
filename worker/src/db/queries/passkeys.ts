@@ -95,6 +95,23 @@ export async function findPasskeyByCredentialId(
     .first<PasskeyRow>()
 }
 
+/** 按 credentialId 全局查询（免密直接登录使用，不按 user_id 限定）。 */
+export async function findPasskeyByGlobalCredentialId(
+  db: D1Database,
+  prefix: string,
+  credentialId: string
+): Promise<PasskeyRow | null> {
+  return db
+    .prepare(
+      `SELECT id, user_id, credential_id, public_key, counter, transports,
+              created_at, last_used_at
+         FROM ${passkeysTable(prefix)}
+        WHERE credential_id = ?`
+    )
+    .bind(credentialId)
+    .first<PasskeyRow>()
+}
+
 export async function insertPasskey(
   db: D1Database,
   prefix: string,

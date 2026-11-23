@@ -6,6 +6,7 @@
  * 用户绑定、凭据落库、成功后发会话、未知凭据被拒、DTO 不泄露公钥。
  */
 import { describe, expect, it, vi } from "vitest"
+import { verifyAuthenticationResponse } from "@simplewebauthn/server"
 
 import { PROJECT_NAME } from "../src/config/project"
 
@@ -37,13 +38,27 @@ vi.mock("@simplewebauthn/server", () => ({
     allowCredentials: [],
     timeout: 60_000
   })),
-  verifyAuthenticationResponse: vi.fn(async () => ({
-    verified: true,
-    authenticationInfo: { credentialID: "cred-1", newCounter: 1 }
-  }))
+  verifyAuthenticationResponse: vi.fn(async (options: any) => {
+    if (options?.response?.id === "invalid-assertion") {
+      return { verified: false }
+    }
+    const currentCounter = options?.credential?.counter ?? 0
+    return {
+      verified: true,
+      authenticationInfo: {
+        credentialID: options?.credential?.id ?? "cred-1",
+        newCounter: currentCounter + 1
+      }
+    }
+  })
 }))
 
+import { findPasskeyByGlobalCredentialId } from "../src/db/queries/passkeys"
+import { writeRegistrationSettings } from "../src/lib/settings"
+import { getTablePrefix } from "../src/lib/table-prefix"
+import { passkeysTable, usersTable } from "../src/lib/tables"
 import {
+  configureResend,
   cookieFrom,
   cookieHeader,
   initializedContext,
@@ -235,5 +250,414 @@ describe("通行密钥", () => {
     expect(((await res.json()) as { code: string }).code).toBe(
       "PASSKEY_CHALLENGE_MISSING"
     )
+  })
+})
+
+describe("通行密钥免密直接登录（discoverable credential）", () => {
+  it("options 端点：匿名可取、置挑战 Cookie、无 allow 列表", async () => {
+    const { env } = await initializedContext()
+    const options = await postJson(env, "/api/auth/passkey/options", {})
+    expect(options.status).toBe(200)
+    const body = (await options.json()) as Record<string, unknown>
+    expect(body.challenge).toBe("auth-challenge")
+    expect("allowCredentials" in body).toBe(false)
+    const challengeCookie = cookieFrom(options, "passkey_challenge")
+    expect(challengeCookie).toBeTruthy()
+  })
+
+  it("已注册第二因子的通行密钥可免密直接登录，成功建立会话并更新 counter", async () => {
+    const { env } = await initializedContext()
+    const prefix = getTablePrefix(env)
+    const { cookie } = await registerAndLogin(env, {
+      email: "direct-user@example.test"
+    })
+
+    // 用户在安全设置中登记第二因子通行密钥
+    const regOpt = await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/options",
+      { password: TEST_PASSWORD },
+      { cookie }
+    )
+    const regChallenge = cookieFrom(regOpt, "passkey_challenge")
+    await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/verify",
+      { credential: { id: "cred-1", type: "public-key" } },
+      { cookie: cookieHeader(cookie, regChallenge) }
+    )
+
+    // 登出
+    await postJson(env, "/api/auth/logout", {}, { cookie })
+
+    // 检查初始 counter 为 0，last_used_at 为 null
+    const beforeRow = await findPasskeyByGlobalCredentialId(
+      env.DB,
+      prefix,
+      "cred-1"
+    )
+    expect(beforeRow?.counter).toBe(0)
+    expect(beforeRow?.last_used_at).toBeNull()
+
+    // 1. 请求免密登录 options（匿名请求）
+    const optRes = await postJson(env, "/api/auth/passkey/options", {})
+    expect(optRes.status).toBe(200)
+    const challengeCookie = cookieFrom(optRes, "passkey_challenge")
+
+    // 2. 提交凭据断言（verify）
+    const verifyRes = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: challengeCookie }
+    )
+    expect(verifyRes.status).toBe(200)
+    const verifyBody = (await verifyRes.json()) as {
+      success: boolean
+      user: { email: string; passkeyCount: number }
+    }
+    expect(verifyBody.success).toBe(true)
+    expect(verifyBody.user.email).toBe("direct-user@example.test")
+    expect(verifyBody.user.passkeyCount).toBe(1)
+
+    // 3. 验证会话 Cookie 成功签发并可用
+    const sessionCookie = cookieFrom(verifyRes)
+    expect(sessionCookie).toBeTruthy()
+    const me = await request(env, "/api/me", {
+      headers: { cookie: sessionCookie }
+    })
+    expect(me.status).toBe(200)
+
+    // 4. counter 递增防重放，且记录 last_used_at
+    const afterRow = await findPasskeyByGlobalCredentialId(
+      env.DB,
+      prefix,
+      "cred-1"
+    )
+    expect(afterRow?.counter).toBe(1)
+    expect(afterRow?.last_used_at).not.toBeNull()
+
+    // 5. 再次登录，counter 递增为 2
+    const optRes2 = await postJson(env, "/api/auth/passkey/options", {})
+    const challengeCookie2 = cookieFrom(optRes2, "passkey_challenge")
+    const verifyRes2 = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: challengeCookie2 }
+    )
+    expect(verifyRes2.status).toBe(200)
+    const afterRow2 = await findPasskeyByGlobalCredentialId(
+      env.DB,
+      prefix,
+      "cred-1"
+    )
+    expect(afterRow2?.counter).toBe(2)
+  })
+
+  it("未知凭据拒绝 (400 PASSKEY_FAILED)", async () => {
+    const { env } = await initializedContext()
+    const optRes = await postJson(env, "/api/auth/passkey/options", {})
+    const challengeCookie = cookieFrom(optRes, "passkey_challenge")
+
+    const res = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "unknown-cred-id" } },
+      { cookie: challengeCookie }
+    )
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { code: string }).code).toBe("PASSKEY_FAILED")
+  })
+
+  it("挑战缺失或过期时拒绝 (400 PASSKEY_CHALLENGE_MISSING)", async () => {
+    const { env } = await initializedContext()
+
+    // 缺失挑战 Cookie
+    const resMissing = await postJson(env, "/api/auth/passkey/verify", {
+      credential: { id: "cred-1" }
+    })
+    expect(resMissing.status).toBe(400)
+    expect(((await resMissing.json()) as { code: string }).code).toBe(
+      "PASSKEY_CHALLENGE_MISSING"
+    )
+
+    // 非法或伪造 Cookie
+    const resBad = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: "passkey_challenge=bad-cookie-value" }
+    )
+    expect(resBad.status).toBe(400)
+    expect(((await resBad.json()) as { code: string }).code).toBe(
+      "PASSKEY_CHALLENGE_MISSING"
+    )
+  })
+
+  it("断言签名失败时拒绝 (401 PASSKEY_FAILED)", async () => {
+    const { env } = await initializedContext()
+    const { cookie } = await registerAndLogin(env, {
+      email: "signer@example.test"
+    })
+    const regOpt = await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/options",
+      { password: TEST_PASSWORD },
+      { cookie }
+    )
+    const regChallenge = cookieFrom(regOpt, "passkey_challenge")
+    await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/verify",
+      { credential: { id: "cred-1", type: "public-key" } },
+      { cookie: cookieHeader(cookie, regChallenge) }
+    )
+
+    const optRes = await postJson(env, "/api/auth/passkey/options", {})
+    const challengeCookie = cookieFrom(optRes, "passkey_challenge")
+
+    vi.mocked(verifyAuthenticationResponse).mockResolvedValueOnce({
+      verified: false
+    } as never)
+
+    const res = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: challengeCookie }
+    )
+    expect(res.status).toBe(401)
+    expect(((await res.json()) as { code: string }).code).toBe("PASSKEY_FAILED")
+  })
+
+  it("账号待审批 (pending) 或已停用 (disabled) 时拒绝直接登录", async () => {
+    const { env, db } = await initializedContext()
+    const prefix = getTablePrefix(env)
+    const { cookie } = await registerAndLogin(env, {
+      email: "status-test@example.test"
+    })
+    const regOpt = await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/options",
+      { password: TEST_PASSWORD },
+      { cookie }
+    )
+    const regChallenge = cookieFrom(regOpt, "passkey_challenge")
+    await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/verify",
+      { credential: { id: "cred-1", type: "public-key" } },
+      { cookie: cookieHeader(cookie, regChallenge) }
+    )
+
+    // 1. pending 状态
+    db.db
+      .prepare(
+        `UPDATE ${usersTable(prefix)} SET status = 'pending' WHERE email = ?`
+      )
+      .run("status-test@example.test")
+
+    const optPending = await postJson(env, "/api/auth/passkey/options", {})
+    const chalPending = cookieFrom(optPending, "passkey_challenge")
+    const resPending = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: chalPending }
+    )
+    expect(resPending.status).toBe(403)
+    expect(((await resPending.json()) as { code: string }).code).toBe(
+      "ACCOUNT_PENDING"
+    )
+
+    // 2. disabled 状态
+    db.db
+      .prepare(
+        `UPDATE ${usersTable(prefix)} SET status = 'disabled' WHERE email = ?`
+      )
+      .run("status-test@example.test")
+
+    const optDisabled = await postJson(env, "/api/auth/passkey/options", {})
+    const chalDisabled = cookieFrom(optDisabled, "passkey_challenge")
+    const resDisabled = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: chalDisabled }
+    )
+    expect(resDisabled.status).toBe(403)
+    expect(((await resDisabled.json()) as { code: string }).code).toBe(
+      "ACCOUNT_DISABLED"
+    )
+  })
+
+  it("凭据存在但用户不存在（未注册用户或已被删除）时拒绝", async () => {
+    const { env } = await initializedContext()
+    const prefix = getTablePrefix(env)
+    await env.DB.prepare(
+      `INSERT INTO ${passkeysTable(prefix)}
+          (user_id, credential_id, public_key, counter, transports, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        999999,
+        "orphan-cred",
+        "AAAA",
+        0,
+        "internal",
+        new Date().toISOString()
+      )
+      .run()
+
+    const optRes = await postJson(env, "/api/auth/passkey/options", {})
+    const challengeCookie = cookieFrom(optRes, "passkey_challenge")
+
+    const res = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "orphan-cred" } },
+      { cookie: challengeCookie }
+    )
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { code: string }).code).toBe("PASSKEY_FAILED")
+  })
+
+  it("强制邮箱验证开启且用户未验证邮箱时拒绝登录", async () => {
+    const { env, db } = await initializedContext()
+    const prefix = getTablePrefix(env)
+    const { cookie } = await registerAndLogin(env, {
+      email: "unverified@example.test"
+    })
+    const regOpt = await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/options",
+      { password: TEST_PASSWORD },
+      { cookie }
+    )
+    const regChallenge = cookieFrom(regOpt, "passkey_challenge")
+    await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/verify",
+      { credential: { id: "cred-1", type: "public-key" } },
+      { cookie: cookieHeader(cookie, regChallenge) }
+    )
+
+    configureResend(db, prefix)
+    await writeRegistrationSettings(env, {
+      emailVerificationRequired: true
+    })
+    db.db
+      .prepare(
+        `UPDATE ${usersTable(prefix)} SET email_verified = 0 WHERE email = ?`
+      )
+      .run("unverified@example.test")
+
+    const optRes = await postJson(env, "/api/auth/passkey/options", {})
+    const challengeCookie = cookieFrom(optRes, "passkey_challenge")
+
+    const res = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: challengeCookie }
+    )
+    expect(res.status).toBe(403)
+    expect(((await res.json()) as { code: string }).code).toBe(
+      "EMAIL_NOT_VERIFIED"
+    )
+  })
+
+  it("底层 WebAuthn 库抛出异常时安全兜底返回 401 PASSKEY_FAILED", async () => {
+    const { env } = await initializedContext()
+    const { cookie } = await registerAndLogin(env, {
+      email: "throw-test@example.test"
+    })
+    const regOpt = await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/options",
+      { password: TEST_PASSWORD },
+      { cookie }
+    )
+    const regChallenge = cookieFrom(regOpt, "passkey_challenge")
+    await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/verify",
+      { credential: { id: "cred-1", type: "public-key" } },
+      { cookie: cookieHeader(cookie, regChallenge) }
+    )
+
+    const optRes = await postJson(env, "/api/auth/passkey/options", {})
+    const challengeCookie = cookieFrom(optRes, "passkey_challenge")
+
+    // 模拟底层库抛出诸如 malformed base64url / counter rewind 异常
+    vi.mocked(verifyAuthenticationResponse).mockRejectedValueOnce(
+      new Error("Signature counter was less than or equal to stored counter")
+    )
+
+    const res = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: challengeCookie }
+    )
+    expect(res.status).toBe(401)
+    expect(((await res.json()) as { code: string }).code).toBe("PASSKEY_FAILED")
+  })
+
+  it("未提供有效断言签名时，不泄漏账号状态、不回显未验证邮箱、不自愈写库", async () => {
+    const { env, db } = await initializedContext()
+    const prefix = getTablePrefix(env)
+    const { cookie } = await registerAndLogin(env, {
+      email: "probe-target@example.test"
+    })
+    const regOpt = await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/options",
+      { password: TEST_PASSWORD },
+      { cookie }
+    )
+    const regChallenge = cookieFrom(regOpt, "passkey_challenge")
+    await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/verify",
+      { credential: { id: "cred-1", type: "public-key" } },
+      { cookie: cookieHeader(cookie, regChallenge) }
+    )
+
+    // 置为未验证状态且待审核
+    db.db
+      .prepare(
+        `UPDATE ${usersTable(prefix)} SET email_verified = 0, status = 'pending' WHERE email = ?`
+      )
+      .run("probe-target@example.test")
+
+    const optRes = await postJson(env, "/api/auth/passkey/options", {})
+    const challengeCookie = cookieFrom(optRes, "passkey_challenge")
+
+    // 攻击者仅持有 credentialId 但无私钥签发有效断言
+    vi.mocked(verifyAuthenticationResponse).mockResolvedValueOnce({
+      verified: false
+    } as never)
+
+    const res = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: challengeCookie }
+    )
+    // 必须直接被 401 PASSKEY_FAILED 拦截，不得暴露 ACCOUNT_PENDING 或 EMAIL_NOT_VERIFIED
+    expect(res.status).toBe(401)
+    const body = (await res.json()) as { code: string; email?: string }
+    expect(body.code).toBe("PASSKEY_FAILED")
+    expect(body.email).toBeUndefined()
+
+    // 检查数据库中 email_verified 仍为 0，没有被未鉴权请求意外自愈
+    const row = db.db
+      .prepare(
+        `SELECT email_verified FROM ${usersTable(prefix)} WHERE email = ?`
+      )
+      .get("probe-target@example.test") as { email_verified: number }
+    expect(row.email_verified).toBe(0)
   })
 })

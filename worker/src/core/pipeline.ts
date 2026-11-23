@@ -19,6 +19,8 @@ import rehypeStringify from "rehype-stringify"
 import type { CommentStatus } from "@caline/shared"
 import { EMOJI_MANIFESTS } from "../data/emojis"
 
+export const EMOJI_STICKER_CLASS = "cl-emoji-sticker"
+
 // 扩展 GitHub 默认 schema，放行 hljs 与 language-* 类名，并放行 img 及其属性（alt, title, src），协议严格限 http(s)
 const SANITIZE_SCHEMA = {
   ...defaultSchema,
@@ -36,7 +38,8 @@ const SANITIZE_SCHEMA = {
       "src",
       "loading",
       "width",
-      "height"
+      "height",
+      ["className", /^cl-/]
     ]
   },
   protocols: {
@@ -52,15 +55,73 @@ const SHORTCODE_REGEX = new RegExp(
   "g"
 )
 
-/** remark 插件：在 mdast 文本节点层替换表情短码为 image 节点 */
+/** 判断图片 URL 是否指向本站 /emoji/ 贴纸路径 */
+export function isSiteEmojiUrl(url: string, baseUrl?: string): boolean {
+  if (!url) return false
+  const trimmed = url.trim()
+
+  // 根相对路径：以 /emoji/ 开头
+  if (trimmed.startsWith("/emoji/")) {
+    return true
+  }
+
+  // 绝对 URL：origin 与当前渲染请求 origin 严格一致，且 pathname 以 /emoji/ 开头
+  if (baseUrl) {
+    try {
+      const parsedCandidate = new URL(trimmed)
+      const parsedBase = new URL(
+        baseUrl.includes("://") ? baseUrl : `https://${baseUrl}`
+      )
+      if (
+        parsedCandidate.origin.toLowerCase() ===
+          parsedBase.origin.toLowerCase() &&
+        parsedCandidate.pathname.startsWith("/emoji/")
+      ) {
+        return true
+      }
+    } catch {
+      return false
+    }
+  }
+
+  return false
+}
+
+function applyEmojiStickerClass(node: any) {
+  if (!node.data) node.data = {}
+  if (!node.data.hProperties) node.data.hProperties = {}
+  const hProps = node.data.hProperties
+  if (Array.isArray(hProps.className)) {
+    if (!hProps.className.includes(EMOJI_STICKER_CLASS)) {
+      hProps.className.push(EMOJI_STICKER_CLASS)
+    }
+  } else if (typeof hProps.className === "string") {
+    const list = hProps.className.trim().split(/\s+/)
+    if (!list.includes(EMOJI_STICKER_CLASS)) {
+      list.push(EMOJI_STICKER_CLASS)
+    }
+    hProps.className = list
+  } else {
+    hProps.className = [EMOJI_STICKER_CLASS]
+  }
+}
+
+/** remark 插件：在 mdast 文本节点层替换表情短码为 image 节点，并为本站表情贴纸打上统一 class */
 export function remarkEmojiShortcode(options: { baseUrl?: string } = {}) {
   const cleanBase = (options.baseUrl || "").trim().replace(/\/+$/, "")
 
   return (tree: any) => {
     function walk(node: any) {
-      if (!node || !Array.isArray(node.children)) return
+      if (!node) return
       // 代码块与行内代码节点本身无 children（属于 Literal），此处显式防护
       if (node.type === "code" || node.type === "inlineCode") return
+
+      // 若节点本身是 Markdown image 节点且指向本站 /emoji/ 路径，打上贴纸 class
+      if (node.type === "image" && isSiteEmojiUrl(node.url, options.baseUrl)) {
+        applyEmojiStickerClass(node)
+      }
+
+      if (!Array.isArray(node.children)) return
 
       const newChildren: any[] = []
       for (const child of node.children) {
@@ -89,7 +150,12 @@ export function remarkEmojiShortcode(options: { baseUrl?: string } = {}) {
               pieces.push({
                 type: "image",
                 url,
-                alt: fullMatch
+                alt: fullMatch,
+                data: {
+                  hProperties: {
+                    className: [EMOJI_STICKER_CLASS]
+                  }
+                }
               })
               lastIndex = matchIndex + fullMatch.length
             }

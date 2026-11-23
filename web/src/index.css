@@ -126,3 +126,16 @@
 [data-resizing="true"] [data-slot="sidebar-container"] {
   transition: none;
 }
+
+/*
+ * 统一贴纸显示尺寸与存量兜底（28px 定高，与 widget 口径一致）
+ */
+.cl-emoji-sticker,
+img[src*="/emoji/"] {
+  height: 28px;
+  width: auto;
+  max-height: 28px;
+  vertical-align: -0.2em;
+  display: inline-block;
+  object-fit: contain;
+}

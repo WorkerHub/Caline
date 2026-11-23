@@ -160,19 +160,26 @@ export async function verifyRegistration(input: {
   }
 }
 
-/** 断言选项：只允许该用户已登记的凭据。 */
+/** 断言选项：若指定 allowCredentialIds 则只允许该列表（第二因子），否则省略 allowCredentials 以启用驻留凭据（免密登录）。 */
 export async function createAuthenticationOptions(input: {
   rp: RelyingParty
-  allowCredentialIds: string[]
+  allowCredentialIds?: string[]
 }): Promise<Awaited<ReturnType<typeof generateAuthenticationOptions>>> {
-  return generateAuthenticationOptions({
+  const options = await generateAuthenticationOptions({
     rpID: input.rp.rpID,
-    allowCredentials: input.allowCredentialIds.map((id) => ({
-      id,
-      type: "public-key" as const
-    })),
+    allowCredentials:
+      input.allowCredentialIds && input.allowCredentialIds.length > 0
+        ? input.allowCredentialIds.map((id) => ({
+            id,
+            type: "public-key" as const
+          }))
+        : undefined,
     userVerification: "preferred"
   })
+  if (!input.allowCredentialIds || input.allowCredentialIds.length === 0) {
+    delete (options as { allowCredentials?: unknown }).allowCredentials
+  }
+  return options
 }
 
 export async function verifyAuthentication(input: {
@@ -181,20 +188,24 @@ export async function verifyAuthentication(input: {
   rp: RelyingParty
   credential: CredentialDescriptor
 }): Promise<{ verified: true; newCounter: number } | { verified: false }> {
-  const result = await verifyAuthenticationResponseLib({
-    response: input.response as Parameters<
-      typeof verifyAuthenticationResponseLib
-    >[0]["response"],
-    expectedChallenge: input.expectedChallenge,
-    expectedOrigin: input.rp.origin,
-    expectedRPID: input.rp.rpID,
-    credential: {
-      id: input.credential.id,
-      publicKey: base64ToBytes(input.credential.publicKey),
-      counter: input.credential.counter
-    },
-    requireUserVerification: false
-  })
-  if (!result.verified) return { verified: false }
-  return { verified: true, newCounter: result.authenticationInfo.newCounter }
+  try {
+    const result = await verifyAuthenticationResponseLib({
+      response: input.response as Parameters<
+        typeof verifyAuthenticationResponseLib
+      >[0]["response"],
+      expectedChallenge: input.expectedChallenge,
+      expectedOrigin: input.rp.origin,
+      expectedRPID: input.rp.rpID,
+      credential: {
+        id: input.credential.id,
+        publicKey: base64ToBytes(input.credential.publicKey),
+        counter: input.credential.counter
+      },
+      requireUserVerification: false
+    })
+    if (!result.verified) return { verified: false }
+    return { verified: true, newCounter: result.authenticationInfo.newCounter }
+  } catch {
+    return { verified: false }
+  }
 }

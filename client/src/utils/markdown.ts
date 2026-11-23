@@ -72,7 +72,9 @@ export function renderMarkdownPreview(
       return ""
     }
     const safe = sanitizeUrl(rawUrl)
-    return `<img src="${safe}" alt="${alt}" class="cl-md-img" loading="lazy">`
+    const isEmoji = safe.includes("/emoji/")
+    const className = isEmoji ? "cl-emoji-sticker" : "cl-md-img"
+    return `<img src="${safe}" alt="${alt}" class="${className}" loading="lazy">`
   })
 
   // 6. 链接 [text](url) - 过滤危险伪协议
@@ -81,7 +83,7 @@ export function renderMarkdownPreview(
     return `<a href="${safe}" target="_blank" rel="nofollow ugc noopener" class="cl-link">${label}</a>`
   })
 
-  // 7. 短码 :<group>_<key>: -> 行内小图（仅限启用贴纸组：qq/weibo/bilibili/douyin）
+  // 7. 短码 :<group>_<key>: -> 行内贴纸（仅限启用贴纸组：qq/weibo/bilibili/douyin，统一 cl-emoji-sticker）
   text = text.replace(
     /:(qq|weibo|bilibili|douyin)_([^:\s]+):/g,
     (fullMatch, group, name) => {
@@ -89,7 +91,7 @@ export function renderMarkdownPreview(
       if (!url) {
         return fullMatch
       }
-      return `<img src="${url}" alt=":${group}_${name}:" class="cl-emoji-inline-img" loading="lazy" style="height:1.25em;width:1.25em;vertical-align:-0.2em;display:inline-block;object-fit:contain;">`
+      return `<img src="${url}" alt=":${group}_${name}:" class="cl-emoji-sticker" loading="lazy">`
     }
   )
 

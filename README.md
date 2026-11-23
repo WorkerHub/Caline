@@ -1,8 +1,6 @@
 # Caline
 
-> 对应方案：《WorkerHub 通用技术方案》main 现行版（[WorkerHub/tech-scheme](https://github.com/WorkerHub/tech-scheme)）。tech-scheme 是法，本仓是法的可运行实现；方案变更后的同步是独立工作。
-
-自研 Waline 替代评论系统（CF 栈）：Cloudflare Workers 服务端 + 共享 D1，评论区 widget + 管理后台三页，从模板基座 v1.0.0 生成。
+全新的评论系统，运行在 Cloudflare 技术栈之上：Cloudflare Workers 服务端 + 共享 D1，评论区 widget + 管理后台三件套，适配 Hexo 等博客系统；从模板基座 v1.0.0 生成。
 
 - **前端**：公开侧包含首页、登录、注册、找回密码与初始化页；登录后左侧为可折叠可调宽侧栏（带菱形 Logo 与「工作台」），个人资料 / 系统管理 / 设置 / 关于收在顶栏头像菜单里（首字圆头像）。支持 PWA 主屏安装与中英双语。
 - **后端**：项目身份单点、表前缀三态、D1 账本迁移、setup 双入口、多因子鉴权（邮箱密码 + TOTP + Passkey + 邮箱第二因子）、注册审核、邮件发送（SMTP / Resend）与系统管理。

@@ -62,6 +62,8 @@ const PUBLIC_ROUTES = new Set([
   "POST /api/upload",
   "POST /api/auth/register",
   "POST /api/auth/login",
+  "POST /api/auth/passkey/options",
+  "POST /api/auth/passkey/verify",
   "POST /api/auth/2fa/verify",
   "POST /api/auth/2fa/email/send",
   "POST /api/auth/2fa/passkey/options",
