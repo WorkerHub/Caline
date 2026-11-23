@@ -68,10 +68,12 @@ export const EMOJI_GROUPS: EmojiGroupInfo[] = [
   { id: "default", nameKey: "emoji_group_default", type: "unicode" },
   { id: "qq", nameKey: "emoji_group_qq", type: "image" },
   { id: "weibo", nameKey: "emoji_group_weibo", type: "image" },
-  { id: "bilibili", nameKey: "emoji_group_bilibili", type: "image" }
+  { id: "bilibili", nameKey: "emoji_group_bilibili", type: "image" },
+  { id: "douyin", nameKey: "emoji_group_douyin", type: "image" }
 ]
 
 const emojiManifestCache = new Map<string, Record<string, string>>()
+const inFlightFetches = new Map<string, Promise<Record<string, string>>>()
 
 export async function fetchEmojiManifest(
   serverUrl: string,
@@ -82,15 +84,62 @@ export async function fetchEmojiManifest(
     return emojiManifestCache.get(cacheKey)!
   }
 
+  const existing = inFlightFetches.get(cacheKey)
+  if (existing) {
+    return existing
+  }
+
   const base = serverUrl.replace(/\/+$/, "")
   const manifestUrl = `${base}/emoji/${group}/manifest.json`
-  const res = await fetch(manifestUrl)
-  if (!res.ok) {
-    throw new Error(`Failed to load emoji manifest: status ${res.status}`)
+
+  const fetchPromise = (async () => {
+    const res = await fetch(manifestUrl)
+    if (!res.ok) {
+      throw new Error(`Failed to load emoji manifest: status ${res.status}`)
+    }
+    const data = (await res.json()) as Record<string, string>
+    emojiManifestCache.set(cacheKey, data)
+    return data
+  })().finally(() => {
+    inFlightFetches.delete(cacheKey)
+  })
+
+  inFlightFetches.set(cacheKey, fetchPromise)
+  return fetchPromise
+}
+
+export async function prefetchEmojiManifests(serverUrl: string): Promise<void> {
+  const imageGroups = EMOJI_GROUPS.filter((g) => g.type === "image")
+  await Promise.allSettled(
+    imageGroups.map((g) => fetchEmojiManifest(serverUrl, g.id))
+  )
+}
+
+export function resolveCachedEmojiUrl(
+  group: string,
+  name: string,
+  serverUrl?: string
+): string | null {
+  if (serverUrl) {
+    const key = `${serverUrl}:${group}`
+    const manifest = emojiManifestCache.get(key)
+    if (manifest && Object.hasOwn(manifest, name)) {
+      return resolveEmojiImageUrl(serverUrl, group, manifest[name])
+    }
   }
-  const data = (await res.json()) as Record<string, string>
-  emojiManifestCache.set(cacheKey, data)
-  return data
+
+  for (const [cacheKey, manifest] of emojiManifestCache.entries()) {
+    const lastColon = cacheKey.lastIndexOf(":")
+    if (lastColon === -1) continue
+    const cachedGroup = cacheKey.slice(lastColon + 1)
+    const cachedServerUrl = cacheKey.slice(0, lastColon)
+
+    if (cachedGroup === group && Object.hasOwn(manifest, name)) {
+      return resolveEmojiImageUrl(cachedServerUrl, group, manifest[name])
+    }
+  }
+
+  return null
 }
 
 export function resolveEmojiImageUrl(
@@ -110,4 +159,5 @@ export function resolveEmojiImageUrl(
 
 export function clearEmojiCache(): void {
   emojiManifestCache.clear()
+  inFlightFetches.clear()
 }

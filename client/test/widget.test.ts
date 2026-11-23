@@ -28,6 +28,7 @@ import {
   EMOJI_GROUPS,
   clearEmojiCache,
   fetchEmojiManifest,
+  prefetchEmojiManifests,
   resolveEmojiImageUrl
 } from "../src/utils/emoji"
 
@@ -49,6 +50,8 @@ describe("Caline Client Widget", () => {
 
       const tZh = createTranslator("zh-CN")
       expect(tZh("btn_submit")).toBe("发表评论")
+      expect(tZh("emoji_group_douyin")).toBe("抖音")
+      expect(tEn("emoji_group_douyin")).toBe("Douyin")
     })
   })
 
@@ -98,6 +101,89 @@ Reply to @alice and @bob
       )
       expect(html).toContain('<span class="cl-at-user">@alice</span>')
       expect(html).toContain('<span class="cl-at-user">@bob</span>')
+    })
+
+    it("renders markdown images with safe http/https and filters pseudo protocols", () => {
+      const safeImg1 = "![sample](https://example.com/pic.png)"
+      const safeImg2 = "![](http://example.com/empty-alt.jpg)"
+      const badImg1 = "![bad](javascript:alert(1))"
+      const badImg2 = "![bad](data:image/svg+xml;base64,PHN2Zz4=)"
+      const badImg3 = "![bad](vbscript:msgbox)"
+      const mixed =
+        "![avatar](https://example.com/me.png) and [profile](https://example.com/user)"
+
+      const htmlSafe1 = renderMarkdownPreview(safeImg1)
+      expect(htmlSafe1).toContain(
+        '<img src="https://example.com/pic.png" alt="sample" class="cl-md-img" loading="lazy">'
+      )
+
+      const htmlSafe2 = renderMarkdownPreview(safeImg2)
+      expect(htmlSafe2).toContain(
+        '<img src="http://example.com/empty-alt.jpg" alt="" class="cl-md-img" loading="lazy">'
+      )
+
+      const htmlBad1 = renderMarkdownPreview(badImg1)
+      expect(htmlBad1).not.toContain("<img")
+      expect(htmlBad1).not.toContain("javascript:")
+
+      const htmlBad2 = renderMarkdownPreview(badImg2)
+      expect(htmlBad2).not.toContain("<img")
+
+      const htmlBad3 = renderMarkdownPreview(badImg3)
+      expect(htmlBad3).not.toContain("<img")
+
+      const htmlMixed = renderMarkdownPreview(mixed)
+      expect(htmlMixed).toContain(
+        '<img src="https://example.com/me.png" alt="avatar" class="cl-md-img" loading="lazy">'
+      )
+      expect(htmlMixed).toContain(
+        '<a href="https://example.com/user" target="_blank" rel="nofollow ugc noopener" class="cl-link">profile</a>'
+      )
+    })
+
+    it("renders cached shortcodes as inline images and preserves uncached ones", async () => {
+      clearEmojiCache()
+
+      const fetchSpy = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/emoji/qq/manifest.json")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ doge: "qq_doge.png", smile: "qq_smile.gif" })
+          })
+        }
+        if (url.includes("/emoji/douyin/manifest.json")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ awsl: "dy_awsl.png" })
+          })
+        }
+        return Promise.resolve({ ok: false, status: 404 })
+      })
+      window.fetch = fetchSpy as unknown as typeof fetch
+
+      await fetchEmojiManifest("https://example.com", "qq")
+      await fetchEmojiManifest("https://example.com", "douyin")
+
+      const md =
+        "Hello :qq_doge: and :douyin_awsl: but :qq_unknown: and :weibo_smile: and :default_smile:"
+      const html = renderMarkdownPreview(md, {
+        serverUrl: "https://example.com"
+      })
+
+      // 命中缓存的短码转为行内小图 <img>
+      expect(html).toContain(
+        '<img src="https://example.com/emoji/qq/qq_doge.png" alt=":qq_doge:" class="cl-emoji-inline-img" loading="lazy" style="height:1.25em;width:1.25em;vertical-align:-0.2em;display:inline-block;object-fit:contain;">'
+      )
+      expect(html).toContain(
+        '<img src="https://example.com/emoji/douyin/dy_awsl.png" alt=":douyin_awsl:" class="cl-emoji-inline-img" loading="lazy" style="height:1.25em;width:1.25em;vertical-align:-0.2em;display:inline-block;object-fit:contain;">'
+      )
+
+      // 缓存未命中或未启用短码的分组保留原文
+      expect(html).toContain(":qq_unknown:")
+      expect(html).toContain(":weibo_smile:")
+      expect(html).toContain(":default_smile:")
     })
   })
 
@@ -1708,14 +1794,20 @@ Reply to @alice and @bob
     })
 
     describe("Emoji panel: grouping, manifest lazy loading & insertion", () => {
-      it("defines 4 emoji groups and fetchEmojiManifest loads manifest with caching", async () => {
-        expect(EMOJI_GROUPS.length).toBe(4)
+      it("defines 5 emoji groups (including douyin) and fetchEmojiManifest loads manifest with caching", async () => {
+        expect(EMOJI_GROUPS.length).toBe(5)
         expect(EMOJI_GROUPS.map((g) => g.id)).toEqual([
           "default",
           "qq",
           "weibo",
-          "bilibili"
+          "bilibili",
+          "douyin"
         ])
+        expect(EMOJI_GROUPS.find((g) => g.id === "douyin")).toEqual({
+          id: "douyin",
+          nameKey: "emoji_group_douyin",
+          type: "image"
+        })
 
         const fetchSpy = vi.fn().mockResolvedValue({
           ok: true,
@@ -1764,11 +1856,12 @@ Reply to @alice and @bob
 
         // 验证 tabs 一行展示
         const tabs = emojiPanel.querySelectorAll(".cl-emoji-tab")
-        expect(tabs.length).toBe(4)
+        expect(tabs.length).toBe(5)
         expect(tabs[0].textContent).toBe("默认")
         expect(tabs[1].textContent).toBe("QQ")
         expect(tabs[2].textContent).toBe("微博")
         expect(tabs[3].textContent).toBe("B站")
+        expect(tabs[4].textContent).toBe("抖音")
 
         // 验证默认分组激活
         expect(tabs[0].classList.contains("active")).toBe(true)
@@ -1780,7 +1873,7 @@ Reply to @alice and @bob
         expect(textarea.value).toBe("😀")
       })
 
-      it("lazy loads manifest on switching to qq group and inserts ![](imageUrl)", async () => {
+      it("lazy loads manifest on switching to qq group and inserts shortcode :qq_name:", async () => {
         const t = createTranslator("zh-CN")
         const fetchMock = vi.fn().mockImplementation((url: string) => {
           if (url.includes("/emoji/qq/manifest.json")) {
@@ -1840,11 +1933,217 @@ Reply to @alice and @bob
         const img = dogeBtn.querySelector("img") as HTMLImageElement
         expect(img.src).toBe("https://example.com/emoji/qq/doge.png")
 
-        // 点击插入 markdown 语法
+        // 点击插入短码语法
         dogeBtn.click()
-        expect(textarea.value).toBe(
-          "![](https://example.com/emoji/qq/doge.png)"
-        )
+        expect(textarea.value).toBe(":qq_doge:")
+      })
+
+      it("switches to douyin tab, lazy loads manifest and inserts :douyin_name:", async () => {
+        clearEmojiCache()
+        const t = createTranslator("zh-CN")
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+          if (url.includes("/emoji/douyin/manifest.json")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                awsl: "dy_awsl.png"
+              })
+            })
+          }
+          return Promise.resolve({ ok: false, status: 404 })
+        })
+        window.fetch = fetchMock as unknown as typeof fetch
+
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onSubmit: vi.fn()
+        })
+
+        const textarea = editor.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
+        const emojiToggle = editor.querySelector(
+          ".cl-tool-btn"
+        ) as HTMLButtonElement
+        emojiToggle.click()
+
+        const emojiPanel = editor.querySelector(
+          ".cl-emoji-panel"
+        ) as HTMLElement
+        const douyinTab = emojiPanel.querySelector(
+          '.cl-emoji-tab[data-group="douyin"]'
+        ) as HTMLButtonElement
+        expect(douyinTab).not.toBeNull()
+        douyinTab.click()
+
+        await vi.waitFor(() => {
+          expect(fetchMock).toHaveBeenCalledWith(
+            "https://example.com/emoji/douyin/manifest.json"
+          )
+        })
+
+        await vi.waitFor(() => {
+          const imgBtns = emojiPanel.querySelectorAll(".cl-emoji-img-btn")
+          expect(imgBtns.length).toBe(1)
+        })
+
+        const awslBtn = emojiPanel.querySelector(
+          '.cl-emoji-img-btn[title="awsl"]'
+        ) as HTMLButtonElement
+        awslBtn.click()
+        expect(textarea.value).toBe(":douyin_awsl:")
+      })
+
+      it("prefetches all enabled sticker manifests on emoji button hover/focus silently", async () => {
+        clearEmojiCache()
+        expect(typeof prefetchEmojiManifests).toBe("function")
+
+        const fetchedUrls: string[] = []
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+          fetchedUrls.push(url)
+          if (url.includes("/emoji/qq/manifest.json")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ doge: "doge.png" })
+            })
+          }
+          // 模拟个别组预取失败，验证静默不抛出
+          return Promise.resolve({ ok: false, status: 500 })
+        })
+        window.fetch = fetchMock as unknown as typeof fetch
+
+        const t = createTranslator("zh-CN")
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onSubmit: vi.fn()
+        })
+
+        const emojiToggle = editor.querySelector(
+          ".cl-tool-btn"
+        ) as HTMLButtonElement
+
+        // 触发 mouseenter
+        emojiToggle.dispatchEvent(new MouseEvent("mouseenter"))
+
+        await vi.waitFor(() => {
+          expect(fetchedUrls).toContain(
+            "https://example.com/emoji/qq/manifest.json"
+          )
+          expect(fetchedUrls).toContain(
+            "https://example.com/emoji/weibo/manifest.json"
+          )
+          expect(fetchedUrls).toContain(
+            "https://example.com/emoji/bilibili/manifest.json"
+          )
+          expect(fetchedUrls).toContain(
+            "https://example.com/emoji/douyin/manifest.json"
+          )
+        })
+
+        // 触发 focus 不会崩溃
+        expect(() => {
+          emojiToggle.dispatchEvent(new FocusEvent("focus"))
+        }).not.toThrow()
+      })
+
+      it("delays img.src assignment using IntersectionObserver until intersecting", async () => {
+        clearEmojiCache()
+        let observerCallback: IntersectionObserverCallback | null = null
+        const observedElements: Element[] = []
+        const unobservedElements: Element[] = []
+
+        class MockObserver {
+          constructor(callback: IntersectionObserverCallback) {
+            observerCallback = callback
+          }
+          observe(el: Element) {
+            observedElements.push(el)
+          }
+          unobserve(el: Element) {
+            unobservedElements.push(el)
+          }
+          disconnect() {}
+        }
+
+        const originalIO = window.IntersectionObserver
+        window.IntersectionObserver =
+          MockObserver as unknown as typeof IntersectionObserver
+
+        try {
+          const fetchMock = vi.fn().mockImplementation((url: string) => {
+            if (url.includes("/emoji/qq/manifest.json")) {
+              return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  doge: "doge.png",
+                  cool: "cool.gif"
+                })
+              })
+            }
+            return Promise.resolve({ ok: false, status: 404 })
+          })
+          window.fetch = fetchMock as unknown as typeof fetch
+
+          const t = createTranslator("zh-CN")
+          const editor = createEditor({
+            t,
+            serverUrl: "https://example.com",
+            onSubmit: vi.fn()
+          })
+
+          const emojiToggle = editor.querySelector(
+            ".cl-tool-btn"
+          ) as HTMLButtonElement
+          emojiToggle.click()
+
+          const emojiPanel = editor.querySelector(
+            ".cl-emoji-panel"
+          ) as HTMLElement
+          const qqTab = emojiPanel.querySelector(
+            '.cl-emoji-tab[data-group="qq"]'
+          ) as HTMLButtonElement
+          qqTab.click()
+
+          await vi.waitFor(() => {
+            expect(observedElements.length).toBe(2)
+          })
+
+          const dogeBtn = emojiPanel.querySelector(
+            '.cl-emoji-img-btn[title="doge"]'
+          ) as HTMLButtonElement
+          const dogeImg = dogeBtn.querySelector("img") as HTMLImageElement
+
+          // 观察前或未交叉时：img.src 为空，图片 URL 保存在 dataset.src
+          expect(dogeImg.getAttribute("src")).toBeNull()
+          expect(dogeImg.dataset.src).toBe(
+            "https://example.com/emoji/qq/doge.png"
+          )
+
+          // 模拟 IntersectionObserver 回调触发交叉（接近可视区）
+          observerCallback!(
+            [
+              {
+                target: dogeImg,
+                isIntersecting: true
+              } as unknown as IntersectionObserverEntry
+            ],
+            new MockObserver(
+              observerCallback!
+            ) as unknown as IntersectionObserver
+          )
+
+          // 交叉后：赋 src，清 dataset.src，执行 unobserve
+          expect(dogeImg.src).toBe("https://example.com/emoji/qq/doge.png")
+          expect(dogeImg.dataset.src).toBeUndefined()
+          expect(unobservedElements).toContain(dogeImg)
+        } finally {
+          window.IntersectionObserver = originalIO
+        }
       })
 
       it("resolveEmojiImageUrl resolves relative, root-relative, and absolute URLs correctly", () => {
