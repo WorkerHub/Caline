@@ -56,3 +56,16 @@ describe("主题持久化", () => {
     expect(moduleAt).toBeGreaterThan(scriptAt)
   })
 })
+
+describe("后台贴纸尺寸规范", () => {
+  it("web/src/index.css 给 .cl-emoji-sticker 与 img[src*='/emoji/'] 定高 28px、width: auto", () => {
+    const css = readFileSync(
+      path.resolve(import.meta.dirname, "../index.css"),
+      "utf8"
+    )
+    expect(css).toContain(".cl-emoji-sticker")
+    expect(css).toContain('img[src*="/emoji/"]')
+    expect(css).toContain("height: 28px")
+    expect(css).toContain("width: auto")
+  })
+})

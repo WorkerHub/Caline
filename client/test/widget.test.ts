@@ -1,4 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from "vitest"
+import fs from "node:fs"
+import path from "node:path"
 import type { AuthMe } from "@caline/shared"
 import { resolveLanguage, createTranslator } from "../src/i18n/locales"
 import { renderMarkdownPreview, isSafeHttpUrl } from "../src/utils/markdown"
@@ -174,16 +176,43 @@ Reply to @alice and @bob
 
       // 命中缓存的短码转为行内小图 <img>
       expect(html).toContain(
-        '<img src="https://example.com/emoji/qq/qq_doge.png" alt=":qq_doge:" class="cl-emoji-inline-img" loading="lazy" style="height:1.25em;width:1.25em;vertical-align:-0.2em;display:inline-block;object-fit:contain;">'
+        '<img src="https://example.com/emoji/qq/qq_doge.png" alt=":qq_doge:" class="cl-emoji-sticker" loading="lazy">'
       )
       expect(html).toContain(
-        '<img src="https://example.com/emoji/douyin/dy_awsl.png" alt=":douyin_awsl:" class="cl-emoji-inline-img" loading="lazy" style="height:1.25em;width:1.25em;vertical-align:-0.2em;display:inline-block;object-fit:contain;">'
+        '<img src="https://example.com/emoji/douyin/dy_awsl.png" alt=":douyin_awsl:" class="cl-emoji-sticker" loading="lazy">'
       )
+      expect(html).not.toContain("height:1.25em")
 
       // 缓存未命中或未启用短码的分组保留原文
       expect(html).toContain(":qq_unknown:")
       expect(html).toContain(":weibo_smile:")
       expect(html).toContain(":default_smile:")
+    })
+
+    it("renders sticker images with .cl-emoji-sticker and uploaded images with .cl-md-img", () => {
+      const md =
+        "![qq doge](https://example.com/emoji/qq/qq_doge.png) and ![upload](https://example.com/img/2026/11/23/test.png)"
+      const html = renderMarkdownPreview(md)
+      expect(html).toContain(
+        '<img src="https://example.com/emoji/qq/qq_doge.png" alt="qq doge" class="cl-emoji-sticker" loading="lazy">'
+      )
+      expect(html).toContain(
+        '<img src="https://example.com/img/2026/11/23/test.png" alt="upload" class="cl-md-img" loading="lazy">'
+      )
+    })
+
+    it("ensures theme.css defines .cl-emoji-sticker 28px height, img[src*='/emoji/'] fallback, and .cl-md-img max-width", () => {
+      const cssPath = path.resolve(
+        import.meta.dirname,
+        "../src/styles/theme.css"
+      )
+      const css = fs.readFileSync(cssPath, "utf8")
+      expect(css).toContain(".cl-emoji-sticker")
+      expect(css).toContain('img[src*="/emoji/"]')
+      expect(css).toContain("height: 28px")
+      expect(css).toContain("width: auto")
+      expect(css).toContain(".cl-md-img")
+      expect(css).toContain("max-width: 100%")
     })
   })
 
@@ -1871,6 +1900,85 @@ Reply to @alice and @bob
         expect(unicodeBtns.length).toBeGreaterThan(10)
         ;(unicodeBtns[0] as HTMLButtonElement).click()
         expect(textarea.value).toBe("😀")
+      })
+
+      it("closes emoji panel on outside pointerdown (textarea, body), stays open on inside click, and leaves no duplicate listeners", () => {
+        const t = createTranslator("zh-CN")
+        const editor = createEditor({
+          t,
+          serverUrl: "https://example.com",
+          onSubmit: vi.fn()
+        })
+        document.body.appendChild(editor)
+
+        const textarea = editor.querySelector(
+          ".cl-textarea"
+        ) as HTMLTextAreaElement
+        const emojiToggle = editor.querySelector(
+          ".cl-tool-btn"
+        ) as HTMLButtonElement
+        const emojiPanel = editor.querySelector(
+          ".cl-emoji-panel"
+        ) as HTMLElement
+
+        // 1. 打开面板
+        emojiToggle.click()
+        expect(emojiPanel.style.display).toBe("flex")
+        expect(emojiToggle.classList.contains("active")).toBe(true)
+
+        // 2. 点击面板内部（如 tabs 或内部元素）不关闭
+        const tab = emojiPanel.querySelector(
+          ".cl-emoji-tab"
+        ) as HTMLButtonElement
+        tab.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))
+        expect(emojiPanel.style.display).toBe("flex")
+
+        emojiPanel.dispatchEvent(
+          new PointerEvent("pointerdown", { bubbles: true })
+        )
+        expect(emojiPanel.style.display).toBe("flex")
+
+        // 3. 点击 textarea 关闭面板
+        textarea.dispatchEvent(
+          new PointerEvent("pointerdown", { bubbles: true })
+        )
+        expect(emojiPanel.style.display).toBe("none")
+        expect(emojiToggle.classList.contains("active")).toBe(false)
+
+        // 4. 再次打开并点击页面空白处（body）关闭
+        emojiToggle.click()
+        expect(emojiPanel.style.display).toBe("flex")
+        document.body.dispatchEvent(
+          new PointerEvent("pointerdown", { bubbles: true })
+        )
+        expect(emojiPanel.style.display).toBe("none")
+
+        // 5. 切换按钮维持现行开关行为
+        emojiToggle.click()
+        expect(emojiPanel.style.display).toBe("flex")
+        emojiToggle.click()
+        expect(emojiPanel.style.display).toBe("none")
+
+        // 6. 反复开关不累积重复监听
+        const addSpy = vi.spyOn(document, "addEventListener")
+        const removeSpy = vi.spyOn(document, "removeEventListener")
+
+        for (let i = 0; i < 5; i++) {
+          emojiToggle.click() // open
+          expect(emojiPanel.style.display).toBe("flex")
+          emojiToggle.click() // close
+          expect(emojiPanel.style.display).toBe("none")
+        }
+
+        // 关闭后点击页面空白处，面板保持关闭
+        document.body.dispatchEvent(
+          new PointerEvent("pointerdown", { bubbles: true })
+        )
+        expect(emojiPanel.style.display).toBe("none")
+
+        addSpy.mockRestore()
+        removeSpy.mockRestore()
+        editor.remove()
       })
 
       it("lazy loads manifest on switching to qq group and inserts shortcode :qq_name:", async () => {
