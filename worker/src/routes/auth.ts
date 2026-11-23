@@ -744,42 +744,6 @@ authRoutes.post("/passkey/verify", async (c) => {
     return apiError(c, 400, "PASSKEY_FAILED", "Unknown passkey credential")
   }
 
-  const user = await findUserById(c.env.DB, prefix, passkey.user_id)
-  if (!user) {
-    clearChallengeCookie(c)
-    return apiError(c, 400, "PASSKEY_FAILED", "Unknown passkey credential")
-  }
-
-  if (user.status === "pending") {
-    clearChallengeCookie(c)
-    return apiError(
-      c,
-      403,
-      "ACCOUNT_PENDING",
-      "This account is waiting for administrator approval"
-    )
-  }
-  if (user.status === "disabled") {
-    clearChallengeCookie(c)
-    return apiError(c, 403, "ACCOUNT_DISABLED", "This account is disabled")
-  }
-
-  const verificationEnforced = await emailVerificationEnforced(c.env)
-  if (verificationEnforced && user.email_verified === 0) {
-    clearChallengeCookie(c)
-    return apiError(
-      c,
-      403,
-      "EMAIL_NOT_VERIFIED",
-      "Verify your email address before signing in",
-      { email: user.email }
-    )
-  }
-  if (!verificationEnforced && user.email_verified === 0) {
-    await updateUserFields(c.env.DB, prefix, user.id, { email_verified: 1 })
-    user.email_verified = 1
-  }
-
   const verdict = await verifyAuthentication({
     response,
     expectedChallenge: challenge,
@@ -793,6 +757,38 @@ authRoutes.post("/passkey/verify", async (c) => {
   clearChallengeCookie(c)
   if (!verdict.verified) {
     return apiError(c, 401, "PASSKEY_FAILED", "Passkey verification failed")
+  }
+
+  const user = await findUserById(c.env.DB, prefix, passkey.user_id)
+  if (!user) {
+    return apiError(c, 400, "PASSKEY_FAILED", "Unknown passkey credential")
+  }
+
+  if (user.status === "pending") {
+    return apiError(
+      c,
+      403,
+      "ACCOUNT_PENDING",
+      "This account is waiting for administrator approval"
+    )
+  }
+  if (user.status === "disabled") {
+    return apiError(c, 403, "ACCOUNT_DISABLED", "This account is disabled")
+  }
+
+  const verificationEnforced = await emailVerificationEnforced(c.env)
+  if (verificationEnforced && user.email_verified === 0) {
+    return apiError(
+      c,
+      403,
+      "EMAIL_NOT_VERIFIED",
+      "Verify your email address before signing in",
+      { email: user.email }
+    )
+  }
+  if (!verificationEnforced && user.email_verified === 0) {
+    await updateUserFields(c.env.DB, prefix, user.id, { email_verified: 1 })
+    user.email_verified = 1
   }
 
   await touchPasskey(c.env.DB, prefix, passkey.id, verdict.newCounter)

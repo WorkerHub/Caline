@@ -188,20 +188,24 @@ export async function verifyAuthentication(input: {
   rp: RelyingParty
   credential: CredentialDescriptor
 }): Promise<{ verified: true; newCounter: number } | { verified: false }> {
-  const result = await verifyAuthenticationResponseLib({
-    response: input.response as Parameters<
-      typeof verifyAuthenticationResponseLib
-    >[0]["response"],
-    expectedChallenge: input.expectedChallenge,
-    expectedOrigin: input.rp.origin,
-    expectedRPID: input.rp.rpID,
-    credential: {
-      id: input.credential.id,
-      publicKey: base64ToBytes(input.credential.publicKey),
-      counter: input.credential.counter
-    },
-    requireUserVerification: false
-  })
-  if (!result.verified) return { verified: false }
-  return { verified: true, newCounter: result.authenticationInfo.newCounter }
+  try {
+    const result = await verifyAuthenticationResponseLib({
+      response: input.response as Parameters<
+        typeof verifyAuthenticationResponseLib
+      >[0]["response"],
+      expectedChallenge: input.expectedChallenge,
+      expectedOrigin: input.rp.origin,
+      expectedRPID: input.rp.rpID,
+      credential: {
+        id: input.credential.id,
+        publicKey: base64ToBytes(input.credential.publicKey),
+        counter: input.credential.counter
+      },
+      requireUserVerification: false
+    })
+    if (!result.verified) return { verified: false }
+    return { verified: true, newCounter: result.authenticationInfo.newCounter }
+  } catch {
+    return { verified: false }
+  }
 }

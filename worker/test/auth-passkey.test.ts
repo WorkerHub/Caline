@@ -567,4 +567,97 @@ describe("通行密钥免密直接登录（discoverable credential）", () => {
       "EMAIL_NOT_VERIFIED"
     )
   })
+
+  it("底层 WebAuthn 库抛出异常时安全兜底返回 401 PASSKEY_FAILED", async () => {
+    const { env } = await initializedContext()
+    const { cookie } = await registerAndLogin(env, {
+      email: "throw-test@example.test"
+    })
+    const regOpt = await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/options",
+      { password: TEST_PASSWORD },
+      { cookie }
+    )
+    const regChallenge = cookieFrom(regOpt, "passkey_challenge")
+    await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/verify",
+      { credential: { id: "cred-1", type: "public-key" } },
+      { cookie: cookieHeader(cookie, regChallenge) }
+    )
+
+    const optRes = await postJson(env, "/api/auth/passkey/options", {})
+    const challengeCookie = cookieFrom(optRes, "passkey_challenge")
+
+    // 模拟底层库抛出诸如 malformed base64url / counter rewind 异常
+    vi.mocked(verifyAuthenticationResponse).mockRejectedValueOnce(
+      new Error("Signature counter was less than or equal to stored counter")
+    )
+
+    const res = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: challengeCookie }
+    )
+    expect(res.status).toBe(401)
+    expect(((await res.json()) as { code: string }).code).toBe("PASSKEY_FAILED")
+  })
+
+  it("未提供有效断言签名时，不泄漏账号状态、不回显未验证邮箱、不自愈写库", async () => {
+    const { env, db } = await initializedContext()
+    const prefix = getTablePrefix(env)
+    const { cookie } = await registerAndLogin(env, {
+      email: "probe-target@example.test"
+    })
+    const regOpt = await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/options",
+      { password: TEST_PASSWORD },
+      { cookie }
+    )
+    const regChallenge = cookieFrom(regOpt, "passkey_challenge")
+    await postJson(
+      env,
+      "/api/auth/2fa/passkey/register/verify",
+      { credential: { id: "cred-1", type: "public-key" } },
+      { cookie: cookieHeader(cookie, regChallenge) }
+    )
+
+    // 置为未验证状态且待审核
+    db.db
+      .prepare(
+        `UPDATE ${usersTable(prefix)} SET email_verified = 0, status = 'pending' WHERE email = ?`
+      )
+      .run("probe-target@example.test")
+
+    const optRes = await postJson(env, "/api/auth/passkey/options", {})
+    const challengeCookie = cookieFrom(optRes, "passkey_challenge")
+
+    // 攻击者仅持有 credentialId 但无私钥签发有效断言
+    vi.mocked(verifyAuthenticationResponse).mockResolvedValueOnce({
+      verified: false
+    } as never)
+
+    const res = await postJson(
+      env,
+      "/api/auth/passkey/verify",
+      { credential: { id: "cred-1" } },
+      { cookie: challengeCookie }
+    )
+    // 必须直接被 401 PASSKEY_FAILED 拦截，不得暴露 ACCOUNT_PENDING 或 EMAIL_NOT_VERIFIED
+    expect(res.status).toBe(401)
+    const body = (await res.json()) as { code: string; email?: string }
+    expect(body.code).toBe("PASSKEY_FAILED")
+    expect(body.email).toBeUndefined()
+
+    // 检查数据库中 email_verified 仍为 0，没有被未鉴权请求意外自愈
+    const row = db.db
+      .prepare(
+        `SELECT email_verified FROM ${usersTable(prefix)} WHERE email = ?`
+      )
+      .get("probe-target@example.test") as { email_verified: number }
+    expect(row.email_verified).toBe(0)
+  })
 })
