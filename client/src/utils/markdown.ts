@@ -8,6 +8,8 @@
  * 4. 预览 ≠ 最终，最终展示的 contentHtml 恒由服务端 unified 链安全产出。
  */
 
+import { resolveCachedEmojiUrl } from "./emoji"
+
 export function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -31,7 +33,10 @@ export function isSafeHttpUrl(url?: string): boolean {
   return /^https?:\/\//i.test(clean)
 }
 
-export function renderMarkdownPreview(markdown: string): string {
+export function renderMarkdownPreview(
+  markdown: string,
+  options?: { serverUrl?: string }
+): string {
   if (!markdown?.trim()) return ""
 
   // 1. 全文 HTML 实体转义，扼杀任何嵌入的 <script>、<iframe>、<img onerror> 等
@@ -61,19 +66,40 @@ export function renderMarkdownPreview(markdown: string): string {
     }
   )
 
-  // 5. 链接 [text](url) - 过滤危险伪协议
+  // 5. 图片 ![alt](url) - 严格仅允许 http/https 协议
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, rawUrl) => {
+    if (!isSafeHttpUrl(rawUrl)) {
+      return ""
+    }
+    const safe = sanitizeUrl(rawUrl)
+    return `<img src="${safe}" alt="${alt}" class="cl-md-img" loading="lazy">`
+  })
+
+  // 6. 链接 [text](url) - 过滤危险伪协议
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, rawUrl) => {
     const safe = sanitizeUrl(rawUrl)
     return `<a href="${safe}" target="_blank" rel="nofollow ugc noopener" class="cl-link">${label}</a>`
   })
 
-  // 6. 粗体 **bold**
+  // 7. 短码 :<group>_<key>: -> 行内小图（仅限启用贴纸组：qq/weibo/bilibili/douyin）
+  text = text.replace(
+    /:(qq|weibo|bilibili|douyin)_([^:\s]+):/g,
+    (fullMatch, group, name) => {
+      const url = resolveCachedEmojiUrl(group, name, options?.serverUrl)
+      if (!url) {
+        return fullMatch
+      }
+      return `<img src="${url}" alt=":${group}_${name}:" class="cl-emoji-inline-img" loading="lazy" style="height:1.25em;width:1.25em;vertical-align:-0.2em;display:inline-block;object-fit:contain;">`
+    }
+  )
+
+  // 8. 粗体 **bold**
   text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
 
-  // 7. 斜体 *italic*
+  // 9. 斜体 *italic*
   text = text.replace(/\*(.*?)\*/g, "<em>$1</em>")
 
-  // 8. 引用块 > quote (按行解析)
+  // 10. 引用块 > quote (按行解析)
   const lines = text.split("\n")
   const processedLines: string[] = []
   let inBlockquote = false
@@ -103,13 +129,13 @@ export function renderMarkdownPreview(markdown: string): string {
 
   let html = processedLines.join("\n")
 
-  // 9. 段落与空行处理：双换行视作段落，单换行视作 <br>
+  // 11. 段落与空行处理：双换行视作段落，单换行视作 <br>
   html = html
     .split(/\n{2,}/)
     .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
     .join("")
 
-  // 10. 还原多行代码块占位符
+  // 12. 还原多行代码块占位符
   html = html.replace(/<p>§§§CODEBLOCK(\d+)§§§<\/p>/g, (_, idx) => {
     return codeBlocks[Number(idx)] || ""
   })

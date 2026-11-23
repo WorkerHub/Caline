@@ -51,6 +51,7 @@ export type LocaleKey =
   | "emoji_group_qq"
   | "emoji_group_weibo"
   | "emoji_group_bilibili"
+  | "emoji_group_douyin"
 
 export const zhCN: Record<LocaleKey, string> = {
   placeholder_nick: "昵称 *",
@@ -99,7 +100,8 @@ export const zhCN: Record<LocaleKey, string> = {
   emoji_group_default: "默认",
   emoji_group_qq: "QQ",
   emoji_group_weibo: "微博",
-  emoji_group_bilibili: "B站"
+  emoji_group_bilibili: "B站",
+  emoji_group_douyin: "抖音"
 }
 
 export const enUS: Record<LocaleKey, string> = {
@@ -149,7 +151,8 @@ export const enUS: Record<LocaleKey, string> = {
   emoji_group_default: "Default",
   emoji_group_qq: "QQ",
   emoji_group_weibo: "Weibo",
-  emoji_group_bilibili: "Bilibili"
+  emoji_group_bilibili: "Bilibili",
+  emoji_group_douyin: "Douyin"
 }
 
 export type SupportedLang = "zh-CN" | "en"

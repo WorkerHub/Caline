@@ -9,6 +9,7 @@ import {
   EMOJI_BASE_SET,
   EMOJI_GROUPS,
   fetchEmojiManifest,
+  prefetchEmojiManifests,
   resolveEmojiImageUrl
 } from "../utils/emoji"
 import { escapeHtml, renderMarkdownPreview } from "../utils/markdown"
@@ -205,8 +206,14 @@ export function createEditor(props: EditorProps): HTMLElement {
 
   let currentEmojiGroup = "default"
   let hasRenderedEmoji = false
+  let emojiObserver: IntersectionObserver | null = null
 
   async function renderEmojiGroup(groupId: string) {
+    if (emojiObserver) {
+      emojiObserver.disconnect()
+      emojiObserver = null
+    }
+
     currentEmojiGroup = groupId
     const tabs = emojiTabs.querySelectorAll<HTMLButtonElement>(".cl-emoji-tab")
     for (const tab of tabs) {
@@ -244,6 +251,29 @@ export function createEditor(props: EditorProps): HTMLElement {
       emojiContent.innerHTML = ""
       const grid = document.createElement("div")
       grid.className = "cl-emoji-grid"
+
+      const hasObserver = typeof IntersectionObserver !== "undefined"
+      if (hasObserver) {
+        emojiObserver = new IntersectionObserver(
+          (entries, observer) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                const target = entry.target as HTMLImageElement
+                if (target.dataset.src) {
+                  target.src = target.dataset.src
+                  delete target.dataset.src
+                }
+                observer.unobserve(target)
+              }
+            }
+          },
+          {
+            root: grid,
+            rootMargin: "50px"
+          }
+        )
+      }
+
       for (const [name, relPath] of Object.entries(manifest)) {
         const btn = document.createElement("button")
         btn.type = "button"
@@ -253,14 +283,21 @@ export function createEditor(props: EditorProps): HTMLElement {
 
         const imgUrl = resolveEmojiImageUrl(props.serverUrl, groupId, relPath)
         const img = document.createElement("img")
-        img.src = imgUrl
         img.alt = name
         img.className = "cl-emoji-img"
         img.loading = "lazy"
+
+        if (hasObserver && emojiObserver) {
+          img.dataset.src = imgUrl
+          emojiObserver.observe(img)
+        } else {
+          img.src = imgUrl
+        }
+
         btn.appendChild(img)
 
         btn.addEventListener("click", () => {
-          insertTextAtCursor(`![](${imgUrl})`)
+          insertTextAtCursor(`:${groupId}_${name}:`)
         })
         grid.appendChild(btn)
       }
@@ -301,6 +338,13 @@ export function createEditor(props: EditorProps): HTMLElement {
   emojiToggle.textContent = "😀"
   emojiToggle.title = props.t("emoji_panel")
   emojiToggle.setAttribute("aria-label", props.t("emoji_panel"))
+
+  const triggerPrefetch = () => {
+    void prefetchEmojiManifests(props.serverUrl)
+  }
+  emojiToggle.addEventListener("mouseenter", triggerPrefetch)
+  emojiToggle.addEventListener("focus", triggerPrefetch)
+
   emojiToggle.addEventListener("click", () => {
     showEmoji = !showEmoji
     emojiPanel.style.display = showEmoji ? "flex" : "none"
@@ -411,7 +455,9 @@ export function createEditor(props: EditorProps): HTMLElement {
   previewToggle.addEventListener("click", () => {
     isPreview = !isPreview
     if (isPreview) {
-      previewBox.innerHTML = renderMarkdownPreview(textarea.value)
+      previewBox.innerHTML = renderMarkdownPreview(textarea.value, {
+        serverUrl: props.serverUrl
+      })
       previewBox.style.display = "block"
       textarea.style.display = "none"
       previewToggle.classList.add("active")
