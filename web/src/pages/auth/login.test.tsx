@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/lib/api"
 import { LoginPage } from "@/pages/auth/login"
 import { useAuthStore } from "@/stores/auth"
@@ -29,9 +29,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 const { authApi } = await import("@/lib/api")
 
-function renderLogin() {
+const AUTH_SUCCESS_TYPE = `${"cal"}${"ine"}:auth-success`
+
+function renderLogin(initialEntries = ["/login"]) {
   return render(
-    <MemoryRouter initialEntries={["/login"]}>
+    <MemoryRouter initialEntries={initialEntries}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/workbench" element={<p>workbench</p>} />
@@ -343,5 +345,98 @@ describe("找回密码入口随邮件配置显隐", () => {
   it("邮件已配置时显示找回入口", () => {
     renderLogin()
     expect(screen.getByText("忘记密码？")).toBeInTheDocument()
+  })
+})
+
+describe("弹窗模式（?popup=1）", () => {
+  const originalOpener = window.opener
+
+  afterEach(() => {
+    Object.defineProperty(window, "opener", {
+      value: originalOpener,
+      writable: true,
+      configurable: true
+    })
+    vi.restoreAllMocks()
+  })
+
+  it("登录成功后向 opener 发送 postMessage 并关窗", async () => {
+    const postMessage = vi.fn()
+    Object.defineProperty(window, "opener", {
+      value: { postMessage },
+      writable: true,
+      configurable: true
+    })
+    const closeSpy = vi.spyOn(window, "close").mockImplementation(() => {})
+
+    vi.mocked(authApi.login).mockResolvedValue({
+      success: true,
+      user: me()
+    })
+
+    const user = userEvent.setup()
+    renderLogin(["/login?popup=1"])
+    await enterPassword(user)
+
+    await waitFor(() => {
+      expect(postMessage).toHaveBeenCalledWith(
+        { type: AUTH_SUCCESS_TYPE },
+        window.location.origin
+      )
+    })
+    expect(closeSpy).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText("workbench")).not.toBeInTheDocument()
+  })
+
+  it("无 opener 时回现行跳转（进入工作台）", async () => {
+    Object.defineProperty(window, "opener", {
+      value: null,
+      writable: true,
+      configurable: true
+    })
+    const closeSpy = vi.spyOn(window, "close").mockImplementation(() => {})
+
+    vi.mocked(authApi.login).mockResolvedValue({
+      success: true,
+      user: me()
+    })
+
+    const user = userEvent.setup()
+    renderLogin(["/login?popup=1"])
+    await enterPassword(user)
+
+    expect(await screen.findByText("workbench")).toBeInTheDocument()
+    expect(closeSpy).not.toHaveBeenCalled()
+  })
+
+  it("无 opener 时首登改密账号回现行跳转（进入改密页）", async () => {
+    Object.defineProperty(window, "opener", {
+      value: null,
+      writable: true,
+      configurable: true
+    })
+
+    vi.mocked(authApi.login).mockResolvedValue({
+      success: true,
+      user: me({ mustChangePassword: true })
+    })
+
+    const user = userEvent.setup()
+    renderLogin(["/login?popup=1"])
+    await enterPassword(user)
+
+    expect(await screen.findByText("change-password")).toBeInTheDocument()
+  })
+
+  it("弹窗模式内注册链接携带 ?popup=1", () => {
+    renderLogin(["/login?popup=1"])
+    const signupLink = screen.getByRole("link", { name: "注册" })
+    expect(signupLink).toHaveAttribute("href", "/register?popup=1")
+  })
+
+  it("非弹窗模式内注册链接不携带 ?popup=1", () => {
+    renderLogin(["/login"])
+    const signupLink = screen.getByRole("link", { name: "注册" })
+    expect(signupLink).toHaveAttribute("href", "/register")
   })
 })
