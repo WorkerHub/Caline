@@ -215,6 +215,17 @@ export const authApi = {
       body: { tempToken, credential }
     }),
 
+  passkeyDirectOptions: () =>
+    request<Record<string, unknown>>("/auth/passkey/options", {
+      method: "POST"
+    }),
+
+  passkeyDirectVerify: (credential: unknown) =>
+    request<{ success: true; user: Me }>("/auth/passkey/verify", {
+      method: "POST",
+      body: { credential }
+    }),
+
   logout: () => request<{ success: true }>("/auth/logout", { method: "POST" }),
 
   forgotPassword: (input: { email: string; language: string }) =>

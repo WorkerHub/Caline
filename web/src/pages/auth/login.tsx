@@ -257,6 +257,27 @@ export function LoginPage() {
     }
   }
 
+  const loginWithDirectPasskey = async () => {
+    setBusy(true)
+    setError("")
+    setNotice("")
+    try {
+      const options = await authApi.passkeyDirectOptions()
+      const credential = await authenticationCredential(options)
+      const result = await authApi.passkeyDirectVerify(credential)
+      await finishLogin(result.user)
+    } catch (passkeyError) {
+      if (isWebAuthnCancelled(passkeyError)) return
+      setError(
+        passkeyError instanceof ApiError
+          ? describeApiError(t, passkeyError)
+          : t("auth.login.passkeyFailed")
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const submitVerify = async (event: React.FormEvent) => {
     event.preventDefault()
     if (step.kind !== "verify") return
@@ -350,6 +371,18 @@ export function LoginPage() {
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? t("common.loading") : t("auth.login.submit")}
           </Button>
+
+          {passkeyAvailable ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+              onClick={() => void loginWithDirectPasskey()}
+            >
+              {t("auth.login.passkey")}
+            </Button>
+          ) : null}
 
           <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
             {showForgot ? (
