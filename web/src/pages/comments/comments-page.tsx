@@ -411,7 +411,7 @@ export function CommentsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="align-top">
-                    <div className="space-y-1">
+                    <div className="space-y-1 cl-comment-text">
                       <p className="line-clamp-3 text-sm whitespace-pre-wrap break-words">
                         {item.contentRaw}
                       </p>
