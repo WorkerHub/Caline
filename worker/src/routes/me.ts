@@ -238,6 +238,22 @@ meRoutes.post("/avatar", async (c) => {
   const user = await findUserById(c.env.DB, prefix, userId)
   if (!user) return apiError(c, 404, "USER_NOT_FOUND", "User not found")
 
+  // 早期 Content-Length 头校验（粗筛只拦真正的内存放大，放宽 64KB 容纳 multipart headers）
+  const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2MB
+  const MAX_BODY_PREFILTER_SIZE = MAX_AVATAR_SIZE + 64 * 1024
+  const contentLength = c.req.header("content-length")
+  if (contentLength) {
+    const parsedLength = Number.parseInt(contentLength, 10)
+    if (!Number.isNaN(parsedLength) && parsedLength > MAX_BODY_PREFILTER_SIZE) {
+      return calineError(
+        c,
+        400,
+        "FILE_TOO_LARGE",
+        "File size exceeds 2MB limit"
+      )
+    }
+  }
+
   let formData: FormData
   try {
     formData = await c.req.formData()
@@ -254,7 +270,6 @@ meRoutes.post("/avatar", async (c) => {
     return calineError(c, 400, "FILE_REQUIRED", "Avatar file cannot be empty")
   }
 
-  const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2MB
   if (file.size > MAX_AVATAR_SIZE) {
     return calineError(c, 400, "FILE_TOO_LARGE", "File size exceeds 2MB limit")
   }

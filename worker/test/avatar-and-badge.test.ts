@@ -389,6 +389,24 @@ describe("Badge & Avatar Contracts and Behavior", () => {
       expect(body.error.code).toBe("FILE_TOO_LARGE")
     })
 
+    it("Content-Length 预筛：在解析整个请求体前依据请求头拦截超大包", async () => {
+      const ctx = await initializedContext()
+      const prefix = activePrefix(ctx.env)
+      const session = await seedSession(ctx.db, prefix, { role: "user" })
+
+      const res = await request(ctx.env, "/api/me/avatar", {
+        method: "POST",
+        headers: {
+          Cookie: session.cookie,
+          "Content-Length": String(10 * 1024 * 1024)
+        },
+        body: new FormData()
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as { error: { code: string } }
+      expect(body.error.code).toBe("FILE_TOO_LARGE")
+    })
+
     it("非图片拒绝：纯文本文件、虚假拓展名及 gif 均被拒绝", async () => {
       const ctx = await initializedContext()
       const prefix = activePrefix(ctx.env)

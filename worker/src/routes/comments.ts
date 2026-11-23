@@ -172,7 +172,7 @@ commentsRoutes.get("/", async (c) => {
   const resolveBadge = (row: CommentRow): "admin" | undefined => {
     if (row.user_id && userMap.has(row.user_id)) {
       const u = userMap.get(row.user_id)!
-      if (u.role === "admin" || (u.role as string) === "administrator") {
+      if (u.role === "admin") {
         return "admin"
       }
     }
@@ -814,7 +814,7 @@ commentsRoutes.get("/recent", async (c) => {
   const resolveBadge = (row: CommentRow): "admin" | undefined => {
     if (row.user_id && userMap.has(row.user_id)) {
       const u = userMap.get(row.user_id)!
-      if (u.role === "admin" || (u.role as string) === "administrator") {
+      if (u.role === "admin") {
         return "admin"
       }
     }
