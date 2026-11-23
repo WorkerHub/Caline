@@ -201,18 +201,19 @@ Reply to @alice and @bob
       )
     })
 
-    it("ensures theme.css defines .cl-emoji-sticker 28px height, img[src*='/emoji/'] fallback, and .cl-md-img max-width", () => {
+    it("ensures theme.css defines .cl-emoji-sticker 28px height and scoped img[src*='/emoji/'] fallback", () => {
       const cssPath = path.resolve(
         import.meta.dirname,
         "../src/styles/theme.css"
       )
       const css = fs.readFileSync(cssPath, "utf8")
       expect(css).toContain(".cl-emoji-sticker")
-      expect(css).toContain('img[src*="/emoji/"]')
+      expect(css).toContain('.cl-comment-text img[src*="/emoji/"]')
+      expect(css).toContain('.cl-editor-preview img[src*="/emoji/"]')
       expect(css).toContain("height: 28px")
       expect(css).toContain("width: auto")
-      expect(css).toContain(".cl-md-img")
-      expect(css).toContain("max-width: 100%")
+      // 避免裸 img[src*="/emoji/"] 导致全局宿主样式污染
+      expect(css).not.toMatch(/(?:^|\n)\s*img\[src\*="\/emoji\/"\]/)
     })
   })
 
@@ -1966,8 +1967,25 @@ Reply to @alice and @bob
         for (let i = 0; i < 5; i++) {
           emojiToggle.click() // open
           expect(emojiPanel.style.display).toBe("flex")
+          const openAdds = addSpy.mock.calls.filter(
+            (c) => c[0] === "pointerdown"
+          ).length
+          const openRemoves = removeSpy.mock.calls.filter(
+            (c) => c[0] === "pointerdown"
+          ).length
+          // 打开态净增 1 个 pointerdown 监听
+          expect(openAdds - openRemoves).toBe(1)
+
           emojiToggle.click() // close
           expect(emojiPanel.style.display).toBe("none")
+          const closedAdds = addSpy.mock.calls.filter(
+            (c) => c[0] === "pointerdown"
+          ).length
+          const closedRemoves = removeSpy.mock.calls.filter(
+            (c) => c[0] === "pointerdown"
+          ).length
+          // 关闭态监听完全对称移除，净数为 0，反复开关无任何累积
+          expect(closedAdds - closedRemoves).toBe(0)
         }
 
         // 关闭后点击页面空白处，面板保持关闭

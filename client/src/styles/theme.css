@@ -385,28 +385,16 @@
   color: var(--cl-color-danger);
 }
 
-/* 统一贴纸显示尺寸与存量兜底（28px 定高、正文混排垂直对齐不跳行） */
+/* 统一贴纸显示尺寸与存量兜底（28px 定高、正文混排垂直对齐不跳行，限定在评论与预览容器内防宿主污染） */
 .cl-emoji-sticker,
-img[src*="/emoji/"] {
+.cl-comment-text img[src*="/emoji/"],
+.cl-editor-preview img[src*="/emoji/"] {
   height: 28px;
   width: auto;
   max-height: 28px;
   vertical-align: -0.2em;
   display: inline-block;
   object-fit: contain;
-}
-
-/* 评论区普通图片（如上传图）维持现有 max-width 口径 */
-.cl-md-img {
-  max-width: 100%;
-  height: auto;
-  border-radius: var(--cl-radius);
-}
-
-.cl-comment-text img:not(.cl-emoji-sticker):not([src*="/emoji/"]),
-.cl-editor-preview img:not(.cl-emoji-sticker):not([src*="/emoji/"]) {
-  max-width: 100%;
-  height: auto;
 }
 
 /* 顶部信息栏与排序栏 */

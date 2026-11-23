@@ -365,7 +365,6 @@ export function createEditor(props: EditorProps): HTMLElement {
       hasRenderedEmoji = true
       void renderEmojiGroup(currentEmojiGroup)
     }
-    document.removeEventListener("pointerdown", handleOutsidePointerDown)
     document.addEventListener("pointerdown", handleOutsidePointerDown)
   }
 
