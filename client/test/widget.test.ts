@@ -2722,11 +2722,9 @@ Reply to @alice and @bob
     it("site enabled & visitor: renders comment & upload challenges, submits tokens, supports retry on failure", async () => {
       document.body.innerHTML = '<div id="caline"></div>'
 
-      let commentCallback: ((token: string) => void) | undefined
-      let uploadCallback: ((token: string) => void) | undefined
-      let commentExpiredCallback: (() => void) | undefined
-      let commentErrorCallback: (() => void) | undefined
-      let uploadErrorCallback: (() => void) | undefined
+      let turnstileCallback: ((token: string) => void) | undefined
+      let turnstileExpiredCallback: (() => void) | undefined
+      let turnstileErrorCallback: (() => void) | undefined
 
       const mockTurnstile = {
         render: vi
@@ -2734,17 +2732,12 @@ Reply to @alice and @bob
           .mockImplementation(
             (container: HTMLElement, options: Record<string, unknown>) => {
               if (container.classList.contains("cl-turnstile-comment")) {
-                commentCallback = options.callback as (t: string) => void
-                commentExpiredCallback = options[
+                turnstileCallback = options.callback as (t: string) => void
+                turnstileExpiredCallback = options[
                   "expired-callback"
                 ] as () => void
-                commentErrorCallback = options["error-callback"] as () => void
-                return "widget-comment-1"
-              }
-              if (container.classList.contains("cl-turnstile-upload")) {
-                uploadCallback = options.callback as (t: string) => void
-                uploadErrorCallback = options["error-callback"] as () => void
-                return "widget-upload-1"
+                turnstileErrorCallback = options["error-callback"] as () => void
+                return "widget-turnstile-1"
               }
               return "widget-other"
             }
@@ -2838,27 +2831,21 @@ Reply to @alice and @bob
       await Promise.resolve()
       await Promise.resolve()
 
-      // 1. 验证访客发表评论与上传挑战两处已渲染官方组件插槽
+      // 1. 验证访客仅在编辑区下方渲染唯一的官方组件插槽，工具条内无上传插槽
       const commentSlot = document.querySelector(".cl-turnstile-comment")
       const uploadSlot = document.querySelector(".cl-turnstile-upload")
       expect(commentSlot).not.toBeNull()
-      expect(uploadSlot).not.toBeNull()
+      expect(uploadSlot).toBeNull()
+      expect(mockTurnstile.render).toHaveBeenCalledTimes(1)
       expect(mockTurnstile.render).toHaveBeenCalledWith(
         commentSlot,
         expect.objectContaining({
           sitekey: "0x4AAAAAA_test_key"
         })
       )
-      expect(mockTurnstile.render).toHaveBeenCalledWith(
-        uploadSlot,
-        expect.objectContaining({
-          sitekey: "0x4AAAAAA_test_key"
-        })
-      )
 
       // 2. 模拟官方组件校验成功返回 token
-      commentCallback?.("token-comment-abc")
-      uploadCallback?.("token-upload-xyz")
+      turnstileCallback?.("token-comment-abc")
 
       // 3. 访客发表评论
       const nickInput =
@@ -2879,8 +2866,11 @@ Reply to @alice and @bob
         expect(
           (submittedPayload as Record<string, unknown> | null)?.turnstileToken
         ).toBe("token-comment-abc")
-        expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-comment-1")
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-turnstile-1")
       })
+
+      // 模拟评论消费后 reset 刷新出新令牌
+      turnstileCallback?.("token-upload-xyz")
 
       // 4. 访客图片上传
       const file = new File(["dummy content"], "photo.png", {
@@ -2899,18 +2889,16 @@ Reply to @alice and @bob
         expect(
           (uploadedFormData as FormData | null)?.get("turnstileToken")
         ).toBe("token-upload-xyz")
-        expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-upload-1")
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-turnstile-1")
       })
 
       // 5. 过期回调重置
-      commentExpiredCallback?.()
-      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-comment-1")
+      turnstileExpiredCallback?.()
+      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-turnstile-1")
 
       // 6. error-callback 触发重置
-      commentErrorCallback?.()
-      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-comment-1")
-      uploadErrorCallback?.()
-      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-upload-1")
+      turnstileErrorCallback?.()
+      expect(mockTurnstile.reset).toHaveBeenCalledWith("widget-turnstile-1")
     })
 
     it("preserves options.turnstile when /api/public omits turnstileEnabled or fails", async () => {
@@ -2969,7 +2957,8 @@ Reply to @alice and @bob
 
       // options.turnstile 不会被冲刷置空，依然正常生效
       expect(document.querySelector(".cl-turnstile-comment")).not.toBeNull()
-      expect(document.querySelector(".cl-turnstile-upload")).not.toBeNull()
+      expect(document.querySelector(".cl-turnstile-upload")).toBeNull()
+      expect(mockTurnstile.render).toHaveBeenCalledTimes(1)
       expect(mockTurnstile.render).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
@@ -2979,8 +2968,7 @@ Reply to @alice and @bob
     })
 
     it("resets Turnstile widget when comment submission or upload fails to allow retry", async () => {
-      let commentCallback: ((token: string) => void) | undefined
-      let uploadCallback: ((token: string) => void) | undefined
+      let turnstileCallback: ((token: string) => void) | undefined
 
       const mockTurnstile = {
         render: vi
@@ -2988,12 +2976,8 @@ Reply to @alice and @bob
           .mockImplementation(
             (container: HTMLElement, options: Record<string, unknown>) => {
               if (container.classList.contains("cl-turnstile-comment")) {
-                commentCallback = options.callback as (t: string) => void
-                return "fail-widget-comment"
-              }
-              if (container.classList.contains("cl-turnstile-upload")) {
-                uploadCallback = options.callback as (t: string) => void
-                return "fail-widget-upload"
+                turnstileCallback = options.callback as (t: string) => void
+                return "fail-widget-1"
               }
               return "fail-other"
             }
@@ -3052,8 +3036,7 @@ Reply to @alice and @bob
       await Promise.resolve()
       await Promise.resolve()
 
-      commentCallback?.("bad-token")
-      uploadCallback?.("bad-upload-token")
+      turnstileCallback?.("bad-token")
 
       // 1. 评论失败重试
       const nickInput =
@@ -3069,8 +3052,11 @@ Reply to @alice and @bob
 
       submitBtn.click()
       await vi.waitFor(() => {
-        expect(mockTurnstile.reset).toHaveBeenCalledWith("fail-widget-comment")
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("fail-widget-1")
       })
+
+      // 模拟重试刷新令牌
+      turnstileCallback?.("bad-upload-token")
 
       // 2. 上传失败重试
       const file = new File(["dummy"], "bad.png", { type: "image/png" })
@@ -3082,13 +3068,12 @@ Reply to @alice and @bob
       })
       fileInput.dispatchEvent(new Event("change"))
       await vi.waitFor(() => {
-        expect(mockTurnstile.reset).toHaveBeenCalledWith("fail-widget-upload")
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("fail-widget-1")
       })
 
       // 清理
       ;(editor as HTMLElement & { cleanup?: () => void }).cleanup?.()
-      expect(mockTurnstile.remove).toHaveBeenCalledWith("fail-widget-comment")
-      expect(mockTurnstile.remove).toHaveBeenCalledWith("fail-widget-upload")
+      expect(mockTurnstile.remove).toHaveBeenCalledWith("fail-widget-1")
       editor.remove()
     })
 
@@ -3104,7 +3089,7 @@ Reply to @alice and @bob
                 replyCommentCallback = options.callback as (t: string) => void
                 return "reply-widget-1"
               }
-              return "reply-upload-1"
+              return "reply-other"
             }
           ),
         reset: vi.fn(),
@@ -3211,6 +3196,7 @@ Reply to @alice and @bob
         const replySlot = document.querySelector(".cl-reply-editor-slot")
         expect(replySlot).not.toBeNull()
         expect(replySlot?.querySelector(".cl-turnstile-comment")).not.toBeNull()
+        expect(replySlot?.querySelector(".cl-turnstile-upload")).toBeNull()
       })
 
       replyCommentCallback?.("reply-turnstile-token-999")
@@ -3237,6 +3223,327 @@ Reply to @alice and @bob
         expect(replySubmittedPayload?.pid).toBe(1)
         expect(replySubmittedPayload?.rid).toBe(1)
       })
+    })
+
+    it("visitor session: upload image first, then submit comment, both share token and auto-reset", async () => {
+      document.body.innerHTML = '<div id="caline"></div>'
+
+      let turnstileCallback: ((token: string) => void) | undefined
+      const mockTurnstile = {
+        render: vi
+          .fn()
+          .mockImplementation(
+            (container: HTMLElement, options: Record<string, unknown>) => {
+              if (container.classList.contains("cl-turnstile-comment")) {
+                turnstileCallback = options.callback as (t: string) => void
+                return "w-shared-1"
+              }
+              return "w-other"
+            }
+          ),
+        reset: vi.fn(),
+        remove: vi.fn(),
+        getResponse: vi.fn().mockReturnValue("")
+      }
+      ;(window as unknown as { turnstile: unknown }).turnstile = mockTurnstile
+
+      let submittedPayload: Record<string, unknown> | null = null
+      let uploadedFormData: FormData | null = null
+
+      const fetchMock = vi
+        .fn()
+        .mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/api/public")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  turnstileEnabled: true,
+                  turnstileSiteKey: "0x4AAAAAA_test_key"
+                }
+              })
+            })
+          }
+          if (url.includes("/api/auth/me")) {
+            return Promise.resolve({
+              ok: false,
+              status: 401,
+              json: async () => ({ error: { code: "UNAUTHORIZED" } })
+            })
+          }
+          if (url.includes("/api/upload") && init?.method === "POST") {
+            uploadedFormData = init.body as FormData
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ data: { url: "/img/photo.png" } })
+            })
+          }
+          if (url.includes("/api/comments") && init?.method === "POST") {
+            submittedPayload = JSON.parse(init.body as string)
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  comment: {
+                    id: 301,
+                    nick: submittedPayload?.nick,
+                    contentHtml: "<p>Photo comment</p>",
+                    createdAt: new Date().toISOString()
+                  }
+                }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: { items: [], total: 0, totalPages: 0 } })
+          })
+        })
+      window.fetch = fetchMock as unknown as typeof fetch
+
+      const widget = init({
+        el: "#caline",
+        serverURL: "https://example.com",
+        turnstile: { enabled: true, siteKey: "0x4AAAAAA_test_key" }
+      })
+      await widget.checkAuth()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // 初始就绪：获得令牌 1
+      turnstileCallback?.("token-step-1")
+
+      // 先传图：消费令牌 1
+      const file = new File(["dummy"], "photo.png", { type: "image/png" })
+      const fileInput =
+        document.querySelector<HTMLInputElement>('input[type="file"]')!
+      Object.defineProperty(fileInput, "files", {
+        value: [file],
+        writable: true
+      })
+      fileInput.dispatchEvent(new Event("change"))
+
+      await vi.waitFor(() => {
+        expect(uploadedFormData).not.toBeNull()
+        expect(
+          (uploadedFormData as FormData | null)?.get("turnstileToken")
+        ).toBe("token-step-1")
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("w-shared-1")
+      })
+
+      // reset 后自动刷新出令牌 2
+      turnstileCallback?.("token-step-2")
+
+      // 再发表：消费刷新后的令牌 2
+      const nickInput =
+        document.querySelector<HTMLInputElement>(".cl-input-nick")!
+      const textarea =
+        document.querySelector<HTMLTextAreaElement>(".cl-textarea")!
+      const submitBtn =
+        document.querySelector<HTMLButtonElement>(".cl-btn-primary")!
+
+      nickInput.value = "GuestBob"
+      textarea.value = "Now submitting with image"
+      textarea.dispatchEvent(new Event("input"))
+
+      submitBtn.click()
+
+      await vi.waitFor(() => {
+        expect(submittedPayload).not.toBeNull()
+        expect(
+          (submittedPayload as Record<string, unknown> | null)?.turnstileToken
+        ).toBe("token-step-2")
+        expect(mockTurnstile.reset).toHaveBeenCalledTimes(2)
+      })
+    })
+
+    it("visitor session: submit two consecutive comments, both share token and auto-reset", async () => {
+      document.body.innerHTML = '<div id="caline"></div>'
+
+      let turnstileCallback: ((token: string) => void) | undefined
+      const mockTurnstile = {
+        render: vi
+          .fn()
+          .mockImplementation(
+            (container: HTMLElement, options: Record<string, unknown>) => {
+              if (container.classList.contains("cl-turnstile-comment")) {
+                turnstileCallback = options.callback as (t: string) => void
+                return "w-consec-1"
+              }
+              return "w-other"
+            }
+          ),
+        reset: vi.fn(),
+        remove: vi.fn(),
+        getResponse: vi.fn().mockReturnValue("")
+      }
+      ;(window as unknown as { turnstile: unknown }).turnstile = mockTurnstile
+
+      const submittedComments: Array<Record<string, unknown>> = []
+
+      const fetchMock = vi
+        .fn()
+        .mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/api/public")) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  turnstileEnabled: true,
+                  turnstileSiteKey: "0x4AAAAAA_test_key"
+                }
+              })
+            })
+          }
+          if (url.includes("/api/auth/me")) {
+            return Promise.resolve({
+              ok: false,
+              status: 401,
+              json: async () => ({ error: { code: "UNAUTHORIZED" } })
+            })
+          }
+          if (url.includes("/api/comments") && init?.method === "POST") {
+            const body = JSON.parse(init.body as string)
+            submittedComments.push(body)
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: {
+                  comment: {
+                    id: 400 + submittedComments.length,
+                    nick: body.nick,
+                    contentHtml: `<p>${body.content}</p>`,
+                    createdAt: new Date().toISOString()
+                  }
+                }
+              })
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ data: { items: [], total: 0, totalPages: 0 } })
+          })
+        })
+      window.fetch = fetchMock as unknown as typeof fetch
+
+      const widget = init({
+        el: "#caline",
+        serverURL: "https://example.com",
+        turnstile: { enabled: true, siteKey: "0x4AAAAAA_test_key" }
+      })
+      await widget.checkAuth()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // 初始就绪：获得第一枚令牌
+      turnstileCallback?.("token-comment-1")
+
+      const nickInput =
+        document.querySelector<HTMLInputElement>(".cl-input-nick")!
+      const textarea =
+        document.querySelector<HTMLTextAreaElement>(".cl-textarea")!
+      const submitBtn =
+        document.querySelector<HTMLButtonElement>(".cl-btn-primary")!
+
+      nickInput.value = "GuestUser"
+      textarea.value = "First comment"
+      textarea.dispatchEvent(new Event("input"))
+
+      submitBtn.click()
+
+      await vi.waitFor(() => {
+        expect(submittedComments).toHaveLength(1)
+        expect(submittedComments[0]?.turnstileToken).toBe("token-comment-1")
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("w-consec-1")
+      })
+
+      // 重置后无缝刷新出第二枚令牌
+      turnstileCallback?.("token-comment-2")
+
+      textarea.value = "Second comment"
+      textarea.dispatchEvent(new Event("input"))
+
+      submitBtn.click()
+
+      await vi.waitFor(() => {
+        expect(submittedComments).toHaveLength(2)
+        expect(submittedComments[1]?.turnstileToken).toBe("token-comment-2")
+        expect(mockTurnstile.reset).toHaveBeenCalledTimes(2)
+      })
+    })
+
+    it("queue mechanism: action waiting for token proceeds once token resolves", async () => {
+      let turnstileCallback: ((token: string) => void) | undefined
+      const mockTurnstile = {
+        render: vi
+          .fn()
+          .mockImplementation(
+            (container: HTMLElement, options: Record<string, unknown>) => {
+              if (container.classList.contains("cl-turnstile-comment")) {
+                turnstileCallback = options.callback as (t: string) => void
+                return "w-queue-1"
+              }
+              return "w-other"
+            }
+          ),
+        reset: vi.fn(),
+        remove: vi.fn(),
+        getResponse: vi.fn().mockReturnValue("")
+      }
+      ;(window as unknown as { turnstile: unknown }).turnstile = mockTurnstile
+
+      let receivedToken: string | undefined
+      const onUploadMock = vi
+        .fn()
+        .mockImplementation(async (_file: File, token?: string) => {
+          receivedToken = token
+          return { url: "/img/queued.png" }
+        })
+
+      const editor = createEditor({
+        t: createTranslator("zh-CN"),
+        serverUrl: "https://example.com",
+        user: null,
+        turnstile: { enabled: true, siteKey: "0x4AAAAAA_test_key" },
+        onUpload: onUploadMock,
+        onSubmit: async () => {}
+      })
+      document.body.appendChild(editor)
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // 此时尚未触发 turnstileCallback，动作直接发起，进入排队
+      const file = new File(["dummy"], "queued.png", { type: "image/png" })
+      const fileInput =
+        editor.querySelector<HTMLInputElement>('input[type="file"]')!
+      Object.defineProperty(fileInput, "files", {
+        value: [file],
+        writable: true
+      })
+      fileInput.dispatchEvent(new Event("change"))
+
+      // 状态显示为上传中（等待令牌中）
+      const uploadStatus = editor.querySelector(".cl-upload-status")
+      expect(uploadStatus?.textContent).toBe("上传中...")
+      expect(onUploadMock).not.toHaveBeenCalled()
+
+      // 模拟令牌生成，排队队列应立即收到并完成上传
+      turnstileCallback?.("queued-token-999")
+
+      await vi.waitFor(() => {
+        expect(onUploadMock).toHaveBeenCalled()
+        expect(receivedToken).toBe("queued-token-999")
+        expect(mockTurnstile.reset).toHaveBeenCalledWith("w-queue-1")
+      })
+
+      editor.remove()
     })
   })
 })

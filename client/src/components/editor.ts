@@ -84,13 +84,42 @@ export function createEditor(props: EditorProps): HTMLElement {
     props.turnstile?.enabled && props.turnstile.siteKey && !props.user
   )
 
-  let commentTurnstileToken = ""
-  let commentWidgetId: string | null = null
-  const pendingCommentResolvers: Array<(token: string) => void> = []
+  let turnstileToken = ""
+  let turnstileWidgetId: string | null = null
+  const pendingTokenResolvers: Array<(token: string) => void> = []
 
-  let uploadTurnstileToken = ""
-  let uploadWidgetId: string | null = null
-  const pendingUploadResolvers: Array<(token: string) => void> = []
+  function resetTurnstileWidget() {
+    turnstileToken = ""
+    if (showTurnstile && turnstileWidgetId && window.turnstile) {
+      try {
+        window.turnstile.reset(turnstileWidgetId)
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  async function acquireTurnstileToken(): Promise<string | null> {
+    if (!showTurnstile) return null
+    if (turnstileToken) {
+      const tok = turnstileToken
+      turnstileToken = ""
+      return tok
+    }
+    return new Promise<string | null>((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const onTokenReady = (tok: string) => {
+        if (timer) clearTimeout(timer)
+        resolve(tok)
+      }
+      pendingTokenResolvers.push(onTokenReady)
+      timer = setTimeout(() => {
+        const idx = pendingTokenResolvers.indexOf(onTokenReady)
+        if (idx !== -1) pendingTokenResolvers.splice(idx, 1)
+        resolve(null)
+      }, 15000)
+    })
+  }
 
   let isPreview = false
   let showEmoji = false
@@ -203,14 +232,13 @@ export function createEditor(props: EditorProps): HTMLElement {
   container.appendChild(textarea)
   container.appendChild(previewBox)
 
-  // 访客评论 Turnstile 挑战插槽
-  let commentTurnstileSlot: HTMLElement | null = null
-  let uploadTurnstileSlot: HTMLElement | null = null
+  // 访客 Turnstile 挑战插槽（全局唯一，置于编辑区下方供评论与上传共享）
+  let turnstileSlot: HTMLElement | null = null
 
   if (showTurnstile) {
-    commentTurnstileSlot = document.createElement("div")
-    commentTurnstileSlot.className = "cl-turnstile-slot cl-turnstile-comment"
-    container.appendChild(commentTurnstileSlot)
+    turnstileSlot = document.createElement("div")
+    turnstileSlot.className = "cl-turnstile-slot cl-turnstile-comment"
+    container.appendChild(turnstileSlot)
   }
 
   function insertTextAtCursor(text: string) {
@@ -430,26 +458,16 @@ export function createEditor(props: EditorProps): HTMLElement {
   imageBtn.setAttribute("aria-label", props.t("btn_image"))
   imageBtn.innerHTML = ICON_IMAGE
 
-  async function handleUpload(file: File, turnstileToken?: string) {
-    if (showTurnstile && !turnstileToken && !uploadTurnstileToken) {
+  async function handleUpload(file: File, turnstileTokenParam?: string) {
+    let tokenToSend = turnstileTokenParam
+    let usedEditorToken = false
+
+    if (showTurnstile && tokenToSend === undefined) {
       uploadStatusEl.style.display = "inline"
       uploadStatusEl.classList.remove("error")
       uploadStatusEl.textContent = props.t("uploading")
 
-      const token = await new Promise<string | null>((resolve) => {
-        let timer: ReturnType<typeof setTimeout> | null = null
-        const onTokenReady = (tok: string) => {
-          if (timer) clearTimeout(timer)
-          resolve(tok)
-        }
-        pendingUploadResolvers.push(onTokenReady)
-        timer = setTimeout(() => {
-          const idx = pendingUploadResolvers.indexOf(onTokenReady)
-          if (idx !== -1) pendingUploadResolvers.splice(idx, 1)
-          resolve(null)
-        }, 15000)
-      })
-
+      const token = await acquireTurnstileToken()
       if (!token) {
         uploadStatusEl.classList.add("error")
         uploadStatusEl.textContent = props.t("upload_failed")
@@ -457,19 +475,14 @@ export function createEditor(props: EditorProps): HTMLElement {
         fileInput.value = ""
         return
       }
+      tokenToSend = token
+      usedEditorToken = true
     }
 
     imageBtn.disabled = true
     uploadStatusEl.style.display = "inline"
     uploadStatusEl.classList.remove("error")
     uploadStatusEl.textContent = props.t("uploading")
-
-    const tokenToSend =
-      turnstileToken !== undefined
-        ? turnstileToken
-        : showTurnstile
-          ? uploadTurnstileToken
-          : undefined
 
     try {
       let resUrl = ""
@@ -505,15 +518,8 @@ export function createEditor(props: EditorProps): HTMLElement {
       uploadStatusEl.textContent =
         err instanceof Error ? err.message : props.t("upload_failed")
     } finally {
-      if (showTurnstile) {
-        uploadTurnstileToken = ""
-        if (uploadWidgetId && window.turnstile) {
-          try {
-            window.turnstile.reset(uploadWidgetId)
-          } catch {
-            // ignore
-          }
-        }
+      if (showTurnstile && usedEditorToken) {
+        resetTurnstileWidget()
       }
       imageBtn.disabled = false
       fileInput.value = ""
@@ -594,12 +600,6 @@ export function createEditor(props: EditorProps): HTMLElement {
   tools.appendChild(wordLimitEl)
   tools.appendChild(uploadStatusEl)
 
-  if (showTurnstile) {
-    uploadTurnstileSlot = document.createElement("div")
-    uploadTurnstileSlot.className = "cl-turnstile-slot cl-turnstile-upload"
-    tools.appendChild(uploadTurnstileSlot)
-  }
-
   // 提交按钮
   const submitBtn = document.createElement("button")
   submitBtn.type = "button"
@@ -642,30 +642,19 @@ export function createEditor(props: EditorProps): HTMLElement {
       return
     }
 
-    if (showTurnstile && !commentTurnstileToken) {
+    let token: string | undefined
+    if (showTurnstile) {
       submitBtn.disabled = true
       submitBtn.textContent = props.t("btn_submitting")
 
-      const token = await new Promise<string | null>((resolve) => {
-        let timer: ReturnType<typeof setTimeout> | null = null
-        const onTokenReady = (tok: string) => {
-          if (timer) clearTimeout(timer)
-          resolve(tok)
-        }
-        pendingCommentResolvers.push(onTokenReady)
-        timer = setTimeout(() => {
-          const idx = pendingCommentResolvers.indexOf(onTokenReady)
-          if (idx !== -1) pendingCommentResolvers.splice(idx, 1)
-          resolve(null)
-        }, 15000)
-      })
-
-      if (!token) {
+      const acquired = await acquireTurnstileToken()
+      if (!acquired) {
         submitBtn.disabled = false
         submitBtn.textContent = props.t("btn_submit")
         alert(props.t("turnstile_required"))
         return
       }
+      token = acquired
     }
 
     // 仅在访客模式下记忆三件套
@@ -682,7 +671,7 @@ export function createEditor(props: EditorProps): HTMLElement {
         mail,
         link,
         content,
-        turnstileToken: showTurnstile ? commentTurnstileToken : undefined
+        turnstileToken: token
       })
       textarea.value = ""
       closeEmojiPanel()
@@ -694,15 +683,8 @@ export function createEditor(props: EditorProps): HTMLElement {
       const msg = err instanceof Error ? err.message : props.t("error_network")
       alert(msg)
     } finally {
-      if (showTurnstile) {
-        commentTurnstileToken = ""
-        if (commentWidgetId && window.turnstile) {
-          try {
-            window.turnstile.reset(commentWidgetId)
-          } catch {
-            // ignore
-          }
-        }
+      if (showTurnstile && token) {
+        resetTurnstileWidget()
       }
       submitBtn.disabled = false
       submitBtn.textContent = props.t("btn_submit")
@@ -719,68 +701,23 @@ export function createEditor(props: EditorProps): HTMLElement {
       .then((turnstile) => {
         if (!container.isConnected) return
 
-        if (commentTurnstileSlot?.isConnected) {
-          commentWidgetId = turnstile.render(commentTurnstileSlot, {
+        if (turnstileSlot?.isConnected) {
+          turnstileWidgetId = turnstile.render(turnstileSlot, {
             sitekey: props.turnstile!.siteKey,
             theme: "auto",
             callback: (token: string) => {
-              commentTurnstileToken = token
-              while (pendingCommentResolvers.length > 0) {
-                pendingCommentResolvers.shift()?.(token)
+              if (pendingTokenResolvers.length > 0) {
+                const resolver = pendingTokenResolvers.shift()
+                resolver?.(token)
+              } else {
+                turnstileToken = token
               }
             },
             "expired-callback": () => {
-              commentTurnstileToken = ""
-              if (commentWidgetId && window.turnstile) {
-                try {
-                  window.turnstile.reset(commentWidgetId)
-                } catch {
-                  // ignore
-                }
-              }
+              resetTurnstileWidget()
             },
             "error-callback": () => {
-              commentTurnstileToken = ""
-              if (commentWidgetId && window.turnstile) {
-                try {
-                  window.turnstile.reset(commentWidgetId)
-                } catch {
-                  // ignore
-                }
-              }
-            }
-          })
-        }
-
-        if (uploadTurnstileSlot?.isConnected) {
-          uploadWidgetId = turnstile.render(uploadTurnstileSlot, {
-            sitekey: props.turnstile!.siteKey,
-            theme: "auto",
-            callback: (token: string) => {
-              uploadTurnstileToken = token
-              while (pendingUploadResolvers.length > 0) {
-                pendingUploadResolvers.shift()?.(token)
-              }
-            },
-            "expired-callback": () => {
-              uploadTurnstileToken = ""
-              if (uploadWidgetId && window.turnstile) {
-                try {
-                  window.turnstile.reset(uploadWidgetId)
-                } catch {
-                  // ignore
-                }
-              }
-            },
-            "error-callback": () => {
-              uploadTurnstileToken = ""
-              if (uploadWidgetId && window.turnstile) {
-                try {
-                  window.turnstile.reset(uploadWidgetId)
-                } catch {
-                  // ignore
-                }
-              }
+              resetTurnstileWidget()
             }
           })
         }
@@ -792,14 +729,10 @@ export function createEditor(props: EditorProps): HTMLElement {
 
   ;(container as HTMLElement & { cleanup?: () => void }).cleanup = () => {
     closeEmojiPanel()
-    if (commentWidgetId && window.turnstile) {
+    pendingTokenResolvers.length = 0
+    if (turnstileWidgetId && window.turnstile) {
       try {
-        window.turnstile.remove(commentWidgetId)
-      } catch {}
-    }
-    if (uploadWidgetId && window.turnstile) {
-      try {
-        window.turnstile.remove(uploadWidgetId)
+        window.turnstile.remove(turnstileWidgetId)
       } catch {}
     }
   }

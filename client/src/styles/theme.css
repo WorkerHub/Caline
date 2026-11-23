@@ -266,11 +266,6 @@
   justify-content: flex-start;
 }
 
-.cl-turnstile-upload {
-  display: inline-flex;
-  vertical-align: middle;
-}
-
 .cl-turnstile-slot iframe {
   max-width: 100%;
 }
