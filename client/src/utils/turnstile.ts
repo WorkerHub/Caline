@@ -29,7 +29,6 @@ export interface TurnstileApi {
   reset(widgetId?: string): void
   remove(widgetId: string): void
   getResponse(widgetId?: string): string
-  ready?(callback: () => void): void
 }
 
 declare global {
@@ -60,11 +59,7 @@ export function loadTurnstileScript(): Promise<TurnstileApi> {
 
     const onScriptReady = () => {
       if (window.turnstile) {
-        if (typeof window.turnstile.ready === "function") {
-          window.turnstile.ready(() => resolve(window.turnstile!))
-        } else {
-          resolve(window.turnstile)
-        }
+        resolve(window.turnstile)
       } else {
         let attempts = 0
         const interval = setInterval(() => {
