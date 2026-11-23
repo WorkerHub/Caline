@@ -3,7 +3,7 @@
  * 规格约束：
  * - multipart/form-data，文件字段 `file`；
  * - 登录会话或访客均可传；访客须带 turnstileToken（站点开启时），登录用户免 Turnstile；
- * - 每 IP 每分钟至多 5 次限频；
+ * - 每 IP 每分钟至多 5 次限频，每日至多 50 次配额；
  * - 文件校验：仅 png/jpeg/gif/webp（声明类型 + 文件头双重校验），不收 svg，单文件 ≤ 10MB；
  * - 成功返回 {data:{url}}（url 为 /img/<key> 公开读路径）、失败 {error:{code,message}}；
  * - 错误文案进 i18n（zh/en）。
@@ -18,6 +18,18 @@ import { getTablePrefix } from "../lib/table-prefix"
 import type { HonoEnv } from "../types"
 
 export const uploadRoutes = new Hono<HonoEnv>()
+
+export const UPLOAD_MINUTE_LIMIT = {
+  action: "upload_image",
+  windowSeconds: 60,
+  max: 5
+}
+
+export const UPLOAD_DAILY_LIMIT = {
+  action: "upload_image_daily",
+  windowSeconds: 86400,
+  max: 50
+}
 
 export type UploadLanguage = "zh" | "en"
 
@@ -169,17 +181,24 @@ uploadRoutes.post("/", async (c) => {
   const ip = clientIp(c)
   const prefix = getTablePrefix(c.env)
 
-  // 1. 每 IP 每分钟至多 5 次限频
-  const limitRule = {
-    action: "upload_image",
-    ip,
-    windowSeconds: 60,
-    max: 5
-  }
-  const limit = await enforceRateLimit(c.env.DB, prefix, limitRule)
-  if (!limit.allowed) {
+  // 1. 每 IP 频控（每分钟至多 5 次）与每日配额（每日至多 50 次）
+  const minuteLimit = await enforceRateLimit(c.env.DB, prefix, {
+    ...UPLOAD_MINUTE_LIMIT,
+    ip
+  })
+  if (!minuteLimit.allowed) {
     return calineError(c, 429, "RATE_LIMITED", getMsg("RATE_LIMITED"), {
-      retryAfter: limit.retryAfter
+      retryAfter: minuteLimit.retryAfter
+    })
+  }
+
+  const dailyLimit = await enforceRateLimit(c.env.DB, prefix, {
+    ...UPLOAD_DAILY_LIMIT,
+    ip
+  })
+  if (!dailyLimit.allowed) {
+    return calineError(c, 429, "RATE_LIMITED", getMsg("RATE_LIMITED"), {
+      retryAfter: dailyLimit.retryAfter
     })
   }
 

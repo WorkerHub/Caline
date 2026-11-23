@@ -2,6 +2,7 @@
  * 公开只读图片路由（GET /img/<key>）。
  * 规格约束：
  * - 经 worker 公开路由只读 GET /img/<key>；
+ * - Referer 防盗链校验：Referer 为空放行，非空须为 oneboy.app 或 *.oneboy.app，否则 403；
  * - 长缓存 immutable；
  * - 支持 ETag 与 If-None-Match 304。
  */
@@ -9,6 +10,23 @@ import { Hono } from "hono"
 import type { HonoEnv } from "../types"
 
 export const imgRoutes = new Hono<HonoEnv>()
+
+export function isAllowedReferer(referer: string | undefined | null): boolean {
+  if (!referer?.trim()) {
+    return true
+  }
+  try {
+    const url = new URL(referer)
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, "")
+    return (
+      hostname === "oneboy.app" ||
+      (hostname.endsWith(".oneboy.app") &&
+        hostname.length > ".oneboy.app".length)
+    )
+  } catch {
+    return false
+  }
+}
 
 function getMimeTypeByExt(key: string): string {
   const ext = key.split(".").pop()?.toLowerCase()
@@ -42,6 +60,11 @@ function matchesIfNoneMatch(ifNoneMatchHeader: string, etag: string): boolean {
 }
 
 imgRoutes.get("/*", async (c) => {
+  const referer = c.req.header("referer") ?? c.req.header("referrer")
+  if (!isAllowedReferer(referer)) {
+    return c.text("Forbidden", 403)
+  }
+
   const rawPath = c.req.path
   let key: string
   try {

@@ -6,6 +6,8 @@ import {
   seedSession,
   type TestContext
 } from "./support/app"
+import { consumeCounter, readCounter } from "../src/core/counters"
+import { isAllowedReferer } from "../src/routes/img"
 import { writeCalineSettings } from "../src/lib/settings"
 
 const PNG_BYTES = new Uint8Array([
@@ -367,6 +369,277 @@ describe("R2 Image Upload & Public Serving", () => {
         headers: { "CF-Connecting-IP": "192.168.1.101" }
       })
       expect(resOther.status).toBe(200)
+    })
+
+    it("enforces daily quota of 50 uploads per IP and blocks the 51st with 429", async () => {
+      const ip = "192.168.2.1"
+      const prefix = activePrefix(ctx.env)
+      const now = Math.floor(Date.now() / 1000)
+
+      // 预先写入 50 次每日计数
+      for (let i = 0; i < 50; i++) {
+        await consumeCounter(
+          ctx.db,
+          prefix,
+          { action: "upload_image_daily", ip, windowSeconds: 86400 },
+          now
+        )
+      }
+
+      // 发起第 51 次上传，应被每日配额拦截 429
+      const formData = new FormData()
+      formData.append(
+        "file",
+        new Blob([PNG_BYTES], { type: "image/png" }),
+        "test-daily.png"
+      )
+      const res = await makeUploadRequest(formData, {
+        headers: { "CF-Connecting-IP": ip }
+      })
+      expect(res.status).toBe(429)
+      const body = (await res.json()) as {
+        error: { code: string; message: string; retryAfter?: number }
+      }
+      expect(body.error.code).toBe("RATE_LIMITED")
+      expect(body.error.retryAfter).toBeGreaterThanOrEqual(1)
+
+      // 另一个 IP 不受该 IP 每日配额影响
+      const otherIp = "192.168.2.2"
+      const formDataOther = new FormData()
+      formDataOther.append(
+        "file",
+        new Blob([PNG_BYTES], { type: "image/png" }),
+        "test-other.png"
+      )
+      const resOther = await makeUploadRequest(formDataOther, {
+        headers: { "CF-Connecting-IP": otherIp }
+      })
+      expect(resOther.status).toBe(200)
+    })
+
+    it("resets daily quota after 86400 seconds", async () => {
+      const ip = "192.168.2.10"
+      const prefix = activePrefix(ctx.env)
+      const pastTime = Math.floor(Date.now() / 1000) - 86401
+
+      // 在过去的窗口（已过 24h）预设 50 次计数
+      for (let i = 0; i < 50; i++) {
+        await consumeCounter(
+          ctx.db,
+          prefix,
+          { action: "upload_image_daily", ip, windowSeconds: 86400 },
+          pastTime
+        )
+      }
+
+      // 新的一天，上传成功
+      const formData = new FormData()
+      formData.append(
+        "file",
+        new Blob([PNG_BYTES], { type: "image/png" }),
+        "test-reset.png"
+      )
+      const res = await makeUploadRequest(formData, {
+        headers: { "CF-Connecting-IP": ip }
+      })
+      expect(res.status).toBe(200)
+    })
+
+    it("minute-rate-limited requests do not increment daily quota counter", async () => {
+      const ip = "192.168.2.20"
+      const prefix = activePrefix(ctx.env)
+
+      // 同一分钟内成功发送 5 次
+      for (let i = 0; i < 5; i++) {
+        const formData = new FormData()
+        formData.append(
+          "file",
+          new Blob([PNG_BYTES], { type: "image/png" }),
+          `test-${i}.png`
+        )
+        const res = await makeUploadRequest(formData, {
+          headers: { "CF-Connecting-IP": ip }
+        })
+        expect(res.status).toBe(200)
+      }
+
+      // 第 6 次触发分钟频控 429
+      const formData6 = new FormData()
+      formData6.append(
+        "file",
+        new Blob([PNG_BYTES], { type: "image/png" }),
+        "test-6.png"
+      )
+      const res6 = await makeUploadRequest(formData6, {
+        headers: { "CF-Connecting-IP": ip }
+      })
+      expect(res6.status).toBe(429)
+
+      // 每日计数器应仍为 5，未被第 6 次冲刷
+      const dailyCounter = await readCounter(ctx.db, prefix, {
+        action: "upload_image_daily",
+        ip
+      })
+      expect(dailyCounter?.count).toBe(5)
+    })
+  })
+
+  describe("Referer anti-hotlinking for /img/*", () => {
+    it("validates Referer host correctly in helper function", () => {
+      expect(isAllowedReferer(undefined)).toBe(true)
+      expect(isAllowedReferer(null)).toBe(true)
+      expect(isAllowedReferer("")).toBe(true)
+      expect(isAllowedReferer("   ")).toBe(true)
+      expect(isAllowedReferer("https://oneboy.app")).toBe(true)
+      expect(isAllowedReferer("https://oneboy.app/")).toBe(true)
+      expect(isAllowedReferer("https://oneboy.app/blog/post-1")).toBe(true)
+      expect(isAllowedReferer("http://oneboy.app:8080/foo")).toBe(true)
+      expect(isAllowedReferer("https://blog.oneboy.app")).toBe(true)
+      expect(isAllowedReferer("https://admin.oneboy.app/dashboard")).toBe(true)
+      expect(isAllowedReferer("https://sub.sub2.oneboy.app")).toBe(true)
+      expect(isAllowedReferer("https://ONEBOY.APP/path")).toBe(true)
+      expect(isAllowedReferer("https://Blog.OneBoy.App/path")).toBe(true)
+      expect(isAllowedReferer("https://oneboy.app.")).toBe(true)
+      expect(isAllowedReferer("https://other.com")).toBe(false)
+      expect(isAllowedReferer("https://notoneboy.app")).toBe(false)
+      expect(isAllowedReferer("https://evil-oneboy.app")).toBe(false)
+      expect(isAllowedReferer("https://oneboy.app.evil.com")).toBe(false)
+      expect(isAllowedReferer("https://evil.com?ref=oneboy.app")).toBe(false)
+      expect(isAllowedReferer("javascript:alert(1)")).toBe(false)
+      expect(isAllowedReferer("not-a-url")).toBe(false)
+      expect(isAllowedReferer("http://.oneboy.app")).toBe(false)
+    })
+
+    it("allows /img/* access when Referer is absent, empty, or from oneboy.app/*.oneboy.app", async () => {
+      // 先上传一张图片获取 URL
+      const formData = new FormData()
+      formData.append(
+        "file",
+        new Blob([PNG_BYTES], { type: "image/png" }),
+        "hotlink-test.png"
+      )
+      const uploadRes = await makeUploadRequest(formData)
+      expect(uploadRes.status).toBe(200)
+      const { data } = (await uploadRes.json()) as { data: { url: string } }
+      const imgUrl = data.url
+
+      // 1. 无 Referer 头放行
+      const resNoRef = await request(ctx.env, imgUrl)
+      expect(resNoRef.status).toBe(200)
+      expect(resNoRef.headers.get("Cache-Control")).toBe(
+        "public, max-age=31536000, immutable"
+      )
+      expect(resNoRef.headers.get("Content-Type")).toBe("image/png")
+
+      // 2. 空 Referer 放行
+      const resEmptyRef = await request(ctx.env, imgUrl, {
+        headers: { Referer: "" }
+      })
+      expect(resEmptyRef.status).toBe(200)
+
+      // 3. 本站 oneboy.app 放行
+      const resMainHost = await request(ctx.env, imgUrl, {
+        headers: { Referer: "https://oneboy.app/posts/hello" }
+      })
+      expect(resMainHost.status).toBe(200)
+
+      // 4. 子域 blog.oneboy.app 放行
+      const resSubBlog = await request(ctx.env, imgUrl, {
+        headers: { Referer: "https://blog.oneboy.app/articles/1" }
+      })
+      expect(resSubBlog.status).toBe(200)
+
+      // 5. 后台 admin.oneboy.app 放行
+      const resSubAdmin = await request(ctx.env, imgUrl, {
+        headers: { Referer: "https://admin.oneboy.app/manage/comments" }
+      })
+      expect(resSubAdmin.status).toBe(200)
+
+      // 6. 带自定义端口放行
+      const resPort = await request(ctx.env, imgUrl, {
+        headers: { Referer: "http://oneboy.app:8080/test" }
+      })
+      expect(resPort.status).toBe(200)
+    })
+
+    it("blocks /img/* with 403 Forbidden when Referer is from unauthorized domain or malformed", async () => {
+      const formData = new FormData()
+      formData.append(
+        "file",
+        new Blob([PNG_BYTES], { type: "image/png" }),
+        "block-test.png"
+      )
+      const uploadRes = await makeUploadRequest(formData)
+      expect(uploadRes.status).toBe(200)
+      const { data } = (await uploadRes.json()) as { data: { url: string } }
+      const imgUrl = data.url
+
+      // 外站盗链 403
+      const resOther = await request(ctx.env, imgUrl, {
+        headers: { Referer: "https://evil.com/page" }
+      })
+      expect(resOther.status).toBe(403)
+      expect(await resOther.text()).toBe("Forbidden")
+
+      // 仿冒前缀 403
+      const resPrefix = await request(ctx.env, imgUrl, {
+        headers: { Referer: "https://evil-oneboy.app/page" }
+      })
+      expect(resPrefix.status).toBe(403)
+
+      // 仿冒后缀 403
+      const resSuffix = await request(ctx.env, imgUrl, {
+        headers: { Referer: "https://oneboy.app.evil.com/page" }
+      })
+      expect(resSuffix.status).toBe(403)
+
+      // 畸形 Referer 403
+      const resMalformed = await request(ctx.env, imgUrl, {
+        headers: { Referer: "not-a-valid-url" }
+      })
+      expect(resMalformed.status).toBe(403)
+    })
+
+    it("preserves ETag / 304 behavior with valid Referer and blocks with 403 on invalid Referer even with If-None-Match", async () => {
+      const formData = new FormData()
+      formData.append(
+        "file",
+        new Blob([PNG_BYTES], { type: "image/png" }),
+        "etag-test.png"
+      )
+      const uploadRes = await makeUploadRequest(formData)
+      const { data } = (await uploadRes.json()) as { data: { url: string } }
+      const imgUrl = data.url
+
+      // 先拿 ETag
+      const res = await request(ctx.env, imgUrl, {
+        headers: { Referer: "https://oneboy.app" }
+      })
+      expect(res.status).toBe(200)
+      const etag = res.headers.get("ETag")
+      expect(etag).toBeTruthy()
+
+      // 合法 Referer + If-None-Match 命中 304
+      const res304 = await request(ctx.env, imgUrl, {
+        headers: {
+          Referer: "https://blog.oneboy.app",
+          "If-None-Match": etag!
+        }
+      })
+      expect(res304.status).toBe(304)
+      expect(res304.headers.get("ETag")).toBe(etag)
+      expect(res304.headers.get("Cache-Control")).toBe(
+        "public, max-age=31536000, immutable"
+      )
+
+      // 非法 Referer 即使带正确 ETag 也直接 403，不泄露 304 或图片
+      const resForbidden = await request(ctx.env, imgUrl, {
+        headers: {
+          Referer: "https://thief.com",
+          "If-None-Match": etag!
+        }
+      })
+      expect(resForbidden.status).toBe(403)
     })
   })
 
