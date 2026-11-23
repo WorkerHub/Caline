@@ -47,6 +47,7 @@ import {
 } from "../core/webauthn"
 import {
   findPasskeyByCredentialId,
+  findPasskeyByGlobalCredentialId,
   listPasskeys,
   touchPasskey
 } from "../db/queries/passkeys"
@@ -680,6 +681,127 @@ authRoutes.post("/2fa/email/send", async (c) => {
 })
 
 // ─── 通行密钥（第二因子） ──────────────────────────────────────────────────────
+
+authRoutes.post("/passkey/options", async (c) => {
+  const secret = secretOf(c.env)
+  if (!secret) return authUnavailable(c)
+
+  const prefix = getTablePrefix(c.env)
+  const notReady = await requireInitialized(c, prefix)
+  if (notReady) return notReady
+
+  const limit = await enforceRateLimit(c.env.DB, prefix, {
+    ...PASSKEY_LIMIT,
+    ip: clientIp(c)
+  })
+  if (!limit.allowed) return rateLimited(c, limit.retryAfter)
+
+  const options = await createAuthenticationOptions({
+    rp: relyingParty(c),
+    allowCredentialIds: []
+  })
+  await setChallengeCookie(c, secret, options.challenge, "authenticate")
+  return c.json(options)
+})
+
+authRoutes.post("/passkey/verify", async (c) => {
+  const secret = secretOf(c.env)
+  if (!secret) return authUnavailable(c)
+
+  const prefix = getTablePrefix(c.env)
+  const notReady = await requireInitialized(c, prefix)
+  if (notReady) return notReady
+
+  const limit = await enforceRateLimit(c.env.DB, prefix, {
+    ...PASSKEY_LIMIT,
+    ip: clientIp(c)
+  })
+  if (!limit.allowed) return rateLimited(c, limit.retryAfter)
+
+  const challenge = await readChallengeCookie(c, secret, "authenticate")
+  if (!challenge) {
+    return apiError(
+      c,
+      400,
+      "PASSKEY_CHALLENGE_MISSING",
+      "No pending passkey challenge; request options again"
+    )
+  }
+
+  const body = await readJsonBody<{
+    credential?: unknown
+    response?: unknown
+  }>(c)
+  const response = (body?.credential ?? body?.response) as
+    | { id?: unknown }
+    | undefined
+  const credentialId = typeof response?.id === "string" ? response.id : ""
+  const passkey = credentialId
+    ? await findPasskeyByGlobalCredentialId(c.env.DB, prefix, credentialId)
+    : null
+  if (!passkey) {
+    clearChallengeCookie(c)
+    return apiError(c, 400, "PASSKEY_FAILED", "Unknown passkey credential")
+  }
+
+  const verdict = await verifyAuthentication({
+    response,
+    expectedChallenge: challenge,
+    rp: relyingParty(c),
+    credential: {
+      id: passkey.credential_id,
+      publicKey: passkey.public_key,
+      counter: passkey.counter
+    }
+  })
+  clearChallengeCookie(c)
+  if (!verdict.verified) {
+    return apiError(c, 401, "PASSKEY_FAILED", "Passkey verification failed")
+  }
+
+  const user = await findUserById(c.env.DB, prefix, passkey.user_id)
+  if (!user) {
+    return apiError(c, 400, "PASSKEY_FAILED", "Unknown passkey credential")
+  }
+
+  if (user.status === "pending") {
+    return apiError(
+      c,
+      403,
+      "ACCOUNT_PENDING",
+      "This account is waiting for administrator approval"
+    )
+  }
+  if (user.status === "disabled") {
+    return apiError(c, 403, "ACCOUNT_DISABLED", "This account is disabled")
+  }
+
+  const verificationEnforced = await emailVerificationEnforced(c.env)
+  if (verificationEnforced && user.email_verified === 0) {
+    return apiError(
+      c,
+      403,
+      "EMAIL_NOT_VERIFIED",
+      "Verify your email address before signing in",
+      { email: user.email }
+    )
+  }
+  if (!verificationEnforced && user.email_verified === 0) {
+    await updateUserFields(c.env.DB, prefix, user.id, { email_verified: 1 })
+    user.email_verified = 1
+  }
+
+  await touchPasskey(c.env.DB, prefix, passkey.id, verdict.newCounter)
+  await clearCounter(c.env.DB, prefix, { ...LOGIN_FAIL, account: user.email })
+  await clearCounter(c.env.DB, prefix, lockKey(user.email))
+
+  const session = await createSession(c.env.DB, prefix, user.id, {
+    ip: clientIp(c),
+    userAgent: c.req.header("user-agent") ?? ""
+  })
+  setSessionCookie(c, session.token)
+  return c.json({ success: true, user: await buildUserView(c.env, user) })
+})
 
 authRoutes.post("/2fa/passkey/options", async (c) => {
   const body = await readJsonBody<{ tempToken?: string }>(c)
