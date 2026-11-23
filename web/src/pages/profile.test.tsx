@@ -223,4 +223,24 @@ describe("个人设置页头像 UI", () => {
     ).not.toBeInTheDocument()
     expect(meApi.uploadAvatar).not.toHaveBeenCalled()
   })
+
+  it("再次选图或卸载时及时释放先前的对象 URL（防内存泄漏）", async () => {
+    const revokeSpy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {})
+    const user = userEvent.setup()
+    const { unmount } = render(<ProfilePage />)
+
+    const file1 = new File(["dummy 1"], "avatar1.png", { type: "image/png" })
+    const file2 = new File(["dummy 2"], "avatar2.png", { type: "image/png" })
+    const input = screen.getByLabelText("选择图片")
+    await user.upload(input, file1)
+    await user.upload(input, file2)
+
+    expect(revokeSpy).toHaveBeenCalled()
+
+    unmount()
+    expect(revokeSpy.mock.calls.length).toBeGreaterThanOrEqual(2)
+    revokeSpy.mockRestore()
+  })
 })

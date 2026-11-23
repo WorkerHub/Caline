@@ -240,7 +240,6 @@
 
   "profile": {
     "title": "个人资料",
-    "avatar": "头像",
     "selectAvatar": "选择图片",
     "avatarPreview": "头像预览",
     "avatarSaved": "头像已更新",

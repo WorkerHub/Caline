@@ -20,16 +20,11 @@ function Avatar({
 
 function AvatarImage({
   className,
-  src,
-  alt,
   ...props
-}: React.ComponentProps<"img">) {
-  if (!src) return null
+}: React.ComponentProps<typeof AvatarPrimitive.Image>) {
   return (
-    <img
+    <AvatarPrimitive.Image
       data-slot="avatar-image"
-      src={src}
-      alt={alt}
       className={cn("aspect-square size-full object-cover", className)}
       {...props}
     />

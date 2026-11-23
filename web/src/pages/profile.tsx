@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { PencilIcon } from "lucide-react"
 import { toast } from "sonner"
@@ -28,6 +28,14 @@ export function ProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState("")
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl && typeof URL.revokeObjectURL === "function") {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
+
   if (!user) return null
 
   const locked = user.profileLocks.displayNameLocked
@@ -46,6 +54,9 @@ export function ProfilePage() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+    if (previewUrl && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(previewUrl)
+    }
     setSelectedFile(file)
     setAvatarError("")
     const objectUrl =
@@ -73,9 +84,8 @@ export function ProfilePage() {
     setAvatarError("")
     try {
       const res = await meApi.uploadAvatar(selectedFile)
-      const newAvatar = res.avatar || (res as { url?: string }).url
-      if (user && newAvatar) {
-        setUser({ ...user, avatar: newAvatar })
+      if (user && res.avatar) {
+        setUser({ ...user, avatar: res.avatar })
       }
       await refresh()
       toast.success(t("profile.avatarSaved"))

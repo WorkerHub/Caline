@@ -71,10 +71,7 @@ function renderRootComment(
   const stickyHtml = item.sticky
     ? `<span class="cl-sticky-tag">${props.t("sticky")}</span>`
     : ""
-  const badgeHtml = renderBadgeHtml(
-    (item as { badge?: string })?.badge,
-    props.t
-  )
+  const badgeHtml = renderBadgeHtml(item.badge, props.t)
   const levelHtml =
     item.level !== undefined
       ? `<span class="cl-badge">Lv.${item.level}</span>`
@@ -163,10 +160,7 @@ function renderReplyComment(
     ? `<a href="${safeLink}" target="_blank" rel="nofollow ugc noopener" class="cl-nick">${safeNick}</a>`
     : `<span class="cl-nick">${safeNick}</span>`
 
-  const badgeHtml = renderBadgeHtml(
-    (reply as { badge?: string })?.badge,
-    props.t
-  )
+  const badgeHtml = renderBadgeHtml(reply.badge, props.t)
   const levelHtml =
     reply.level !== undefined
       ? `<span class="cl-badge">Lv.${reply.level}</span>`

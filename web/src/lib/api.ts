@@ -316,13 +316,11 @@ export const meApi = {
             fd.append("file", file)
             return fd
           })()
-    return request<{ avatar: string; user?: Me }>("/me/avatar", {
+    return request<{ avatar: string }>("/me/avatar", {
       method: "POST",
       body
     })
   },
-
-  avatar: (file: File | FormData) => meApi.uploadAvatar(file),
 
   changePassword: (input: { currentPassword: string; newPassword: string }) =>
     request<{ success: true }>("/me/password", { method: "PUT", body: input }),

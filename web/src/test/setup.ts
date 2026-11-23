@@ -50,6 +50,44 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   } as unknown as typeof ResizeObserver
 }
 
+// jsdom 未实现 Image 真实资源加载，Radix AvatarPrimitive.Image 依赖 onload 上报切换 fallback。
+if (typeof window !== "undefined") {
+  class MockImage extends EventTarget {
+    onload: ((event: Event) => void) | null = null
+    onerror: ((event: Event) => void) | null = null
+    private _src = ""
+    complete = true
+    naturalWidth = 100
+    naturalHeight = 100
+
+    get src() {
+      return this._src
+    }
+
+    set src(value: string) {
+      this._src = value
+      queueMicrotask(() => {
+        if (value && !value.includes("error") && !value.includes("fail")) {
+          this.complete = true
+          this.naturalWidth = 100
+          this.naturalHeight = 100
+          const event = new Event("load")
+          this.dispatchEvent(event)
+          this.onload?.(event)
+        } else {
+          this.complete = true
+          this.naturalWidth = 0
+          this.naturalHeight = 0
+          const event = new Event("error")
+          this.dispatchEvent(event)
+          this.onerror?.(event)
+        }
+      })
+    }
+  }
+  window.Image = MockImage as unknown as typeof Image
+}
+
 async function resetStores() {
   const [
     { useAuthStore },
