@@ -76,6 +76,7 @@ export function createEditor(props: EditorProps): HTMLElement {
 
   let isPreview = false
   let showEmoji = false
+  let closeEmojiPanel = () => {}
 
   // 1. 回复提示条
   if (props.replyTarget) {
@@ -89,6 +90,7 @@ export function createEditor(props: EditorProps): HTMLElement {
     replyBar
       .querySelector(".cl-reply-cancel")
       ?.addEventListener("click", () => {
+        closeEmojiPanel()
         props.replyTarget?.onCancel()
       })
     container.appendChild(replyBar)
@@ -345,13 +347,40 @@ export function createEditor(props: EditorProps): HTMLElement {
   emojiToggle.addEventListener("mouseenter", triggerPrefetch)
   emojiToggle.addEventListener("focus", triggerPrefetch)
 
-  emojiToggle.addEventListener("click", () => {
-    showEmoji = !showEmoji
-    emojiPanel.style.display = showEmoji ? "flex" : "none"
-    emojiToggle.classList.toggle("active", showEmoji)
-    if (showEmoji && !hasRenderedEmoji) {
+  const handleOutsidePointerDown = (event: PointerEvent) => {
+    const target = event.target as Node | null
+    if (!target) return
+    if (emojiPanel.contains(target) || emojiToggle.contains(target)) {
+      return
+    }
+    closeEmojiPanel()
+  }
+
+  function openEmojiPanel() {
+    if (showEmoji) return
+    showEmoji = true
+    emojiPanel.style.display = "flex"
+    emojiToggle.classList.add("active")
+    if (!hasRenderedEmoji) {
       hasRenderedEmoji = true
       void renderEmojiGroup(currentEmojiGroup)
+    }
+    document.addEventListener("pointerdown", handleOutsidePointerDown)
+  }
+
+  closeEmojiPanel = () => {
+    if (!showEmoji) return
+    showEmoji = false
+    emojiPanel.style.display = "none"
+    emojiToggle.classList.remove("active")
+    document.removeEventListener("pointerdown", handleOutsidePointerDown)
+  }
+
+  emojiToggle.addEventListener("click", () => {
+    if (showEmoji) {
+      closeEmojiPanel()
+    } else {
+      openEmojiPanel()
     }
   })
 
@@ -545,6 +574,7 @@ export function createEditor(props: EditorProps): HTMLElement {
     try {
       await props.onSubmit({ nick, mail, link, content })
       textarea.value = ""
+      closeEmojiPanel()
       updateWordCount()
       if (isPreview) {
         previewToggle.click()

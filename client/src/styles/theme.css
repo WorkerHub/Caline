@@ -365,7 +365,8 @@
   padding: 2px;
 }
 
-.cl-emoji-img {
+.cl-emoji-img,
+.cl-emoji-panel .cl-emoji-img {
   width: 24px;
   height: 24px;
   object-fit: contain;
@@ -382,6 +383,18 @@
 
 .cl-emoji-error {
   color: var(--cl-color-danger);
+}
+
+/* 统一贴纸显示尺寸与存量兜底（28px 定高、正文混排垂直对齐不跳行，限定在评论与预览容器内防宿主污染） */
+.cl-emoji-sticker,
+.cl-comment-text img[src*="/emoji/"],
+.cl-editor-preview img[src*="/emoji/"] {
+  height: 28px;
+  width: auto;
+  max-height: 28px;
+  vertical-align: -0.2em;
+  display: inline-block;
+  object-fit: contain;
 }
 
 /* 顶部信息栏与排序栏 */
