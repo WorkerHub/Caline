@@ -9,8 +9,9 @@ import { countPasskeys } from "../db/queries/passkeys"
 import { getTwoFactor } from "../db/queries/twofa"
 import type { UserRow } from "../db/queries/users"
 import type { Env } from "../types"
+import { formatGravatarUrl } from "../core/gravatar"
+import { readCalineSettings, readProfileLockSettings } from "./settings"
 
-import { readProfileLockSettings } from "./settings"
 export interface UserView {
   id: number
   email: string
@@ -41,6 +42,15 @@ export async function buildUserView(
   const prefix = getTablePrefix(env)
   const twoFactor = await getTwoFactor(env.DB, prefix, user.id)
   const passkeyCount = await countPasskeys(env.DB, prefix, user.id)
+  const settings = await readCalineSettings(env)
+  const avatar =
+    user.avatar && user.avatar.trim().length > 0
+      ? user.avatar.trim()
+      : formatGravatarUrl(
+          user.email,
+          user.display_name,
+          settings.gravatarMirror
+        )
   return {
     id: user.id,
     email: user.email,
@@ -56,7 +66,7 @@ export async function buildUserView(
     passkeyCount,
     profileLocks: await readProfileLockSettings(env),
     label: user.label || undefined,
-    avatar: user.avatar || undefined,
+    avatar,
     url: user.url || undefined,
     githubId: user.github_id ?? null
   }

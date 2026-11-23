@@ -27,6 +27,7 @@ import { getTablePrefix } from "../lib/table-prefix"
 import { isValidTimezone } from "../lib/timezone"
 import { buildUserView } from "../lib/user-view"
 import { normalizeLanguage } from "../locales/email"
+import { validateImage } from "./upload"
 import type { HonoEnv } from "../types"
 
 export const meRoutes = new Hono<HonoEnv>()
@@ -227,4 +228,111 @@ meRoutes.delete("/passkeys/:id", async (c) => {
     return apiError(c, 404, "PASSKEY_NOT_FOUND", "Passkey not found")
   }
   return c.json({ success: true })
+})
+
+// ─── 头像上传（POST /api/me/avatar） ─────────────────────────────────────────
+
+meRoutes.post("/avatar", async (c) => {
+  const userId = currentUserId(c)
+  const prefix = getTablePrefix(c.env)
+  const user = await findUserById(c.env.DB, prefix, userId)
+  if (!user) return apiError(c, 404, "USER_NOT_FOUND", "User not found")
+
+  let formData: FormData
+  try {
+    formData = await c.req.formData()
+  } catch {
+    return calineError(c, 400, "INVALID_REQUEST", "Invalid form data")
+  }
+
+  const file = formData.get("file") ?? formData.get("avatar")
+  if (!file || typeof file === "string" || !(file instanceof File)) {
+    return calineError(c, 400, "FILE_REQUIRED", "Avatar file is required")
+  }
+
+  if (file.size === 0) {
+    return calineError(c, 400, "FILE_REQUIRED", "Avatar file cannot be empty")
+  }
+
+  const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2MB
+  if (file.size > MAX_AVATAR_SIZE) {
+    return calineError(c, 400, "FILE_TOO_LARGE", "File size exceeds 2MB limit")
+  }
+
+  const headerBuffer = await file.slice(0, 16).arrayBuffer()
+  const headerBytes = new Uint8Array(headerBuffer)
+  const validated = validateImage(file.type, headerBytes)
+  if (!validated || validated.type === "gif") {
+    return calineError(
+      c,
+      400,
+      "INVALID_FILE_TYPE",
+      "Unsupported file type. Only png, jpeg, and webp are allowed"
+    )
+  }
+
+  if (!c.env.IMAGES) {
+    return calineError(
+      c,
+      500,
+      "STORAGE_NOT_CONFIGURED",
+      "Object storage is not configured"
+    )
+  }
+
+  const randomPart = crypto.randomUUID().replace(/-/g, "")
+  const newKey = `avatars/${userId}/${randomPart}.${validated.ext}`
+  const fileBuffer = await file.arrayBuffer()
+  await c.env.IMAGES.put(newKey, fileBuffer, {
+    httpMetadata: {
+      contentType: validated.mimeType
+    }
+  })
+
+  // 替换头像时删除该用户旧头像 R2 对象，避免堆积
+  try {
+    const oldAvatar = user.avatar?.trim()
+    if (oldAvatar) {
+      let oldKey: string | null = null
+      if (oldAvatar.startsWith("/img/")) {
+        oldKey = oldAvatar.slice("/img/".length)
+      } else {
+        try {
+          const u = new URL(oldAvatar, "http://localhost")
+          if (u.pathname.startsWith("/img/")) {
+            oldKey = u.pathname.slice("/img/".length)
+          }
+        } catch {
+          // ignore
+        }
+      }
+      if (oldKey?.startsWith(`avatars/${userId}/`) && oldKey !== newKey) {
+        await c.env.IMAGES.delete(oldKey)
+      }
+    }
+
+    if (typeof c.env.IMAGES.list === "function") {
+      const listed = await c.env.IMAGES.list({
+        prefix: `avatars/${userId}/`
+      })
+      const staleKeys = listed.objects
+        .map((o) => o.key)
+        .filter((k) => k !== newKey)
+      if (staleKeys.length > 0) {
+        await c.env.IMAGES.delete(staleKeys)
+      }
+    }
+  } catch (err) {
+    console.error("Failed to clean up old avatar objects:", err)
+  }
+
+  const avatarUrl = `/img/${newKey}`
+  await updateUserFields(c.env.DB, prefix, userId, {
+    avatar: avatarUrl
+  })
+
+  return calineSuccess(c, {
+    url: avatarUrl,
+    avatar: avatarUrl
+  })
 })

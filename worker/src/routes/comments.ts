@@ -129,6 +129,7 @@ commentsRoutes.get("/", async (c) => {
       url: string
       label: string
       email: string
+      role: string
     }
   >()
   for (const uid of userIds) {
@@ -139,7 +140,8 @@ commentsRoutes.get("/", async (c) => {
         avatar: u.avatar,
         url: u.url,
         label: u.label,
-        email: u.email
+        email: u.email,
+        role: u.role
       })
     }
   }
@@ -161,16 +163,18 @@ commentsRoutes.get("/", async (c) => {
   const resolveAvatar = (row: CommentRow): string => {
     if (row.user_id && userMap.has(row.user_id)) {
       const u = userMap.get(row.user_id)!
-      if (u.avatar && u.avatar.trim().length > 0) return u.avatar
+      if (u.avatar && u.avatar.trim().length > 0) return u.avatar.trim()
       return formatGravatarUrl(u.email, u.displayName, settings.gravatarMirror)
     }
     return formatGravatarUrl(row.mail, row.nick, settings.gravatarMirror)
   }
 
-  const resolveBadge = (row: CommentRow): string | undefined => {
+  const resolveBadge = (row: CommentRow): "admin" | undefined => {
     if (row.user_id && userMap.has(row.user_id)) {
       const u = userMap.get(row.user_id)!
-      if (u.label && u.label.trim().length > 0) return u.label
+      if (u.role === "admin" || (u.role as string) === "administrator") {
+        return "admin"
+      }
     }
     return undefined
   }
@@ -212,6 +216,7 @@ commentsRoutes.get("/", async (c) => {
 
     const normalizedMail = reply.mail?.trim().toLowerCase()
     const level = normalizedMail ? mailLevelMap.get(normalizedMail) : undefined
+    const replyBadge = resolveBadge(reply)
 
     repliesByRoot.get(rid)!.push({
       id: reply.id,
@@ -227,7 +232,7 @@ commentsRoutes.get("/", async (c) => {
       likeCount: reply.like_count,
       createdAt: reply.created_at,
       updatedAt: reply.updated_at,
-      badge: resolveBadge(reply),
+      ...(replyBadge ? { badge: replyBadge } : {}),
       level
     })
   }
@@ -236,6 +241,7 @@ commentsRoutes.get("/", async (c) => {
   const publicItems: CommentPublicItem[] = rootRows.map((root) => {
     const normalizedMail = root.mail?.trim().toLowerCase()
     const level = normalizedMail ? mailLevelMap.get(normalizedMail) : undefined
+    const badge = resolveBadge(root)
 
     return {
       id: root.id,
@@ -249,7 +255,7 @@ commentsRoutes.get("/", async (c) => {
       likeCount: root.like_count,
       createdAt: root.created_at,
       updatedAt: root.updated_at,
-      badge: resolveBadge(root),
+      ...(badge ? { badge } : {}),
       level,
       replies: repliesByRoot.get(root.id) || []
     }
@@ -768,16 +774,67 @@ commentsRoutes.get("/recent", async (c) => {
   const settings = await readCalineSettings(c.env)
   const rows = await listRecentComments(c.env.DB, prefix, count)
 
+  const userIds = [
+    ...new Set(
+      rows
+        .map((r) => r.user_id)
+        .filter((id): id is number => typeof id === "number" && id > 0)
+    )
+  ]
+  const userMap = new Map<
+    number,
+    {
+      displayName: string
+      avatar: string
+      email: string
+      role: string
+    }
+  >()
+  for (const uid of userIds) {
+    const u = await findUserById(c.env.DB, prefix, uid)
+    if (u) {
+      userMap.set(uid, {
+        displayName: u.display_name,
+        avatar: u.avatar,
+        email: u.email,
+        role: u.role
+      })
+    }
+  }
+
+  const resolveAvatar = (row: CommentRow): string => {
+    if (row.user_id && userMap.has(row.user_id)) {
+      const u = userMap.get(row.user_id)!
+      if (u.avatar && u.avatar.trim().length > 0) return u.avatar.trim()
+      return formatGravatarUrl(u.email, u.displayName, settings.gravatarMirror)
+    }
+    return formatGravatarUrl(row.mail, row.nick, settings.gravatarMirror)
+  }
+
+  const resolveBadge = (row: CommentRow): "admin" | undefined => {
+    if (row.user_id && userMap.has(row.user_id)) {
+      const u = userMap.get(row.user_id)!
+      if (u.role === "admin" || (u.role as string) === "administrator") {
+        return "admin"
+      }
+    }
+    return undefined
+  }
+
   // 组装脱敏展示数据（mail、ip、ua 绝对不出现）
-  const result: RecentCommentsResult = rows.map((row) => ({
-    id: row.id,
-    url: row.url,
-    nick: row.nick,
-    avatar: formatGravatarUrl(row.mail, row.nick, settings.gravatarMirror),
-    link: row.link,
-    contentHtml: row.content_html,
-    createdAt: row.created_at
-  }))
+  const result: RecentCommentsResult = rows.map((row) => {
+    const badge = resolveBadge(row)
+    return {
+      id: row.id,
+      url: row.url,
+      nick: row.nick,
+      avatar: resolveAvatar(row),
+      link: row.link,
+      contentHtml: row.content_html,
+      createdAt: row.created_at,
+      ...(badge ? { badge } : {})
+    }
+  })
 
   return calineSuccess(c, result)
 })

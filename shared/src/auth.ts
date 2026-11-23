@@ -84,3 +84,9 @@ export interface LogoutResult {
 
 /** 弹窗模式登录成功向 opener 发送的 postMessage 事件类型 */
 export const AUTH_SUCCESS_TYPE = "caline:auth-success"
+
+/** POST /api/me/avatar 响应 data 形状 */
+export interface UploadAvatarResult {
+  url: string
+  avatar: string
+}
