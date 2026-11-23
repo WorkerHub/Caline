@@ -8,6 +8,8 @@ export interface Env {
   DB: D1Database
   /** Workers Static Assets：前端构建产物 web/dist。 */
   ASSETS: Fetcher
+  /** 图片对象存储（专属 R2 桶）：绑定名 IMAGES。 */
+  IMAGES?: R2Bucket
   /** setup / 数据库维护的 X-Setup-Secret 令牌（仓库级 secret）。 */
   SETUP_SECRET?: string
   /**

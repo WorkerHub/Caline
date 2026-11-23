@@ -11,6 +11,7 @@ import { sha256Hex } from "../../src/core/auth"
 import { SESSION_COOKIE } from "../../src/core/session"
 import { PROJECT_NAME } from "../../src/config/project"
 import type { Env } from "../../src/types"
+import { MockR2Bucket } from "./mock-r2"
 import { SqliteD1 } from "./sqlite-d1"
 
 export const TEST_SETUP_SECRET = "test-setup-secret"
@@ -49,7 +50,8 @@ function assets(): Fetcher {
       if (
         pathname === "/client/v1.js" ||
         pathname === "/ui/assets/index.js" ||
-        pathname.startsWith("/icons/")
+        pathname.startsWith("/icons/") ||
+        pathname.startsWith("/emoji/")
       ) {
         return new Response("/* static asset */", {
           status: 200,
@@ -64,20 +66,23 @@ function assets(): Fetcher {
 export interface TestContext {
   env: Env
   db: SqliteD1
+  images: MockR2Bucket
 }
 
 /** 新环境：空库 + 假静态资源 + 测试密钥；默认不设 TABLE_PREFIX（走默认前缀）。 */
 export function makeContext(overrides: Partial<Env> = {}): TestContext {
   const db = new SqliteD1()
+  const images = new MockR2Bucket()
   const env = {
     DB: db as unknown as D1Database,
     ASSETS: assets(),
+    IMAGES: images,
     SETUP_SECRET: TEST_SETUP_SECRET,
     SIGNING_SECRET: TEST_SIGNING_SECRET,
     APP_VERSION: TEST_APP_VERSION,
     ...overrides
   } as Env
-  return { env, db }
+  return { env, db, images }
 }
 
 /** 已初始化（默认前缀）的环境。 */
