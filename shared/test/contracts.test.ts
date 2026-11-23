@@ -6,9 +6,9 @@ import {
   type AuthMe,
   type CalineDataDump,
   type CalineSiteSettings,
+  type Comment,
   type CommentCountsResult,
   type CommentMeItem,
-  type CommentPublicItem,
   type CreateCommentInput,
   type CreateCommentResult,
   type ListCommentsResult,
@@ -44,7 +44,7 @@ describe("@caline/shared contracts", () => {
   })
 
   it("satisfies comment tree structure without exposing guest email", () => {
-    const rootComment: CommentPublicItem = {
+    const rootComment: Comment = {
       id: 1,
       userId: null,
       nick: "GuestUser",
@@ -74,7 +74,8 @@ describe("@caline/shared contracts", () => {
           contentHtml: "<p>Welcome!</p>",
           likeCount: 1,
           createdAt: "2026-11-18T00:05:00.000Z",
-          updatedAt: "2026-11-18T00:05:00.000Z"
+          updatedAt: "2026-11-18T00:05:00.000Z",
+          badge: "admin"
         }
       ]
     }
@@ -88,6 +89,8 @@ describe("@caline/shared contracts", () => {
     }
 
     expect(listResult.items[0].replies[0].replyTo?.nick).toBe("GuestUser")
+    expect(listResult.items[0].replies[0].badge).toBe("admin")
+    expect(listResult.items[0].badge).toBeUndefined()
     // Verify `mail` is not on the public comment item
     expect("mail" in listResult.items[0]).toBe(false)
   })
