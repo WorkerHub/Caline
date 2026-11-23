@@ -254,8 +254,13 @@ describe("Emoji Sticker Uniform Sizing & Server-side Class (cl-emoji-sticker)", 
   })
 
   it("attaches cl-emoji-sticker class to Markdown image with root-relative /emoji/ path", async () => {
-    const html = await renderAndSanitizeMarkdown("![sticker](/emoji/x)", baseUrl)
-    expect(html).toContain('<img src="/emoji/x" alt="sticker" class="cl-emoji-sticker">')
+    const html = await renderAndSanitizeMarkdown(
+      "![sticker](/emoji/x)",
+      baseUrl
+    )
+    expect(html).toContain(
+      '<img src="/emoji/x" alt="sticker" class="cl-emoji-sticker">'
+    )
   })
 
   it("attaches cl-emoji-sticker class to Markdown image with same-origin absolute URL starting with /emoji/", async () => {
@@ -273,7 +278,9 @@ describe("Emoji Sticker Uniform Sizing & Server-side Class (cl-emoji-sticker)", 
       "![uploaded](/img/2026/11/23/abcdef.webp)",
       baseUrl
     )
-    expect(html).toContain('<img src="/img/2026/11/23/abcdef.webp" alt="uploaded">')
+    expect(html).toContain(
+      '<img src="/img/2026/11/23/abcdef.webp" alt="uploaded">'
+    )
     expect(html).not.toContain("cl-emoji-sticker")
   })
 
@@ -282,7 +289,9 @@ describe("Emoji Sticker Uniform Sizing & Server-side Class (cl-emoji-sticker)", 
       "![external](https://other.com/emoji/x)",
       baseUrl
     )
-    expect(html).toContain('<img src="https://other.com/emoji/x" alt="external">')
+    expect(html).toContain(
+      '<img src="https://other.com/emoji/x" alt="external">'
+    )
     expect(html).not.toContain("cl-emoji-sticker")
   })
 
@@ -291,7 +300,9 @@ describe("Emoji Sticker Uniform Sizing & Server-side Class (cl-emoji-sticker)", 
       "![external](https://external.com/pic.png)",
       baseUrl
     )
-    expect(html).toContain('<img src="https://external.com/pic.png" alt="external">')
+    expect(html).toContain(
+      '<img src="https://external.com/pic.png" alt="external">'
+    )
     expect(html).not.toContain("cl-emoji-sticker")
   })
 
@@ -320,9 +331,7 @@ describe("Emoji Sticker Uniform Sizing & Server-side Class (cl-emoji-sticker)", 
     expect(html).toContain(
       '<img src="https://example.com/emoji/weibo/weibo_doge.png" alt="abs" class="cl-emoji-sticker">'
     )
-    expect(html).toContain(
-      '<img src="/img/avatar.png" alt="upload">'
-    )
+    expect(html).toContain('<img src="/img/avatar.png" alt="upload">')
     expect(html).toContain(
       '<img src="https://evil.org/emoji/fake.gif" alt="ext">'
     )
