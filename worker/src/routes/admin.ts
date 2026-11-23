@@ -640,7 +640,8 @@ adminRoutes.patch("/comments/:id", async (c) => {
 
   let contentHtml: string | undefined
   if (body.content !== undefined) {
-    contentHtml = await renderAndSanitizeMarkdown(body.content)
+    const baseUrl = new URL(c.req.url).origin
+    contentHtml = await renderAndSanitizeMarkdown(body.content, baseUrl)
   }
 
   const updated = await adminUpdateCommentFields(c.env.DB, prefix, id, {

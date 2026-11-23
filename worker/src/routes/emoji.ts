@@ -1,6 +1,6 @@
 /**
  * 表情包清单路由（GET /emoji/<group>/manifest.json）。
- * 自托管 @waline/emojis 1.2.0 三包（qq, weibo, bilibili）。
+ * 自托管表情包（qq, weibo, bilibili, douyin）。
  */
 import { Hono } from "hono"
 import { EMOJI_MANIFESTS } from "../data/emojis"
