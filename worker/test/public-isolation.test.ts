@@ -1,6 +1,6 @@
 /**
  * 规格 §7-8（公开隔离）：
- * - `/api/public` 只有七个公开字段，可缓存；
+ * - `/api/public` 只有公开字段，可缓存；
  * - 私有接口未登录一律 401 JSON + `no-store`；
  * - 公开响应里不出现密码哈希、TOTP 密钥、邮件配置等私有数据；
  * - 未命中的 API 是 JSON 404，不落 SPA 回落。
@@ -21,11 +21,13 @@ const PUBLIC_KEYS = [
   "registrationEnabled",
   "repositoryUrl",
   "tagline",
+  "turnstileEnabled",
+  "turnstileSiteKey",
   "version"
 ]
 
 describe("公开面隔离", () => {
-  it("/api/public：七字段、可缓存、无私有字段", async () => {
+  it("/api/public：公开字段、可缓存、无私有字段", async () => {
     const { env } = await initializedContext()
     const res = await request(env, "/api/public")
     expect(res.status).toBe(200)
@@ -39,7 +41,9 @@ describe("公开面隔离", () => {
       appMode: "multi",
       registrationEnabled: true,
       emailConfigured: false,
-      version: TEST_APP_VERSION
+      version: TEST_APP_VERSION,
+      turnstileEnabled: false,
+      turnstileSiteKey: ""
     })
     expect(String(body.repositoryUrl)).toContain("github.com")
     expect(String(body.tagline).length).toBeGreaterThan(0)
@@ -54,6 +58,50 @@ describe("公开面隔离", () => {
     ]) {
       expect(raw.toLowerCase()).not.toContain(forbidden)
     }
+  })
+
+  it("/api/public：下发 Turnstile 配置（开启下发 sitekey、关闭为空字符串、私钥不泄露）", async () => {
+    const { env } = await initializedContext()
+    const { writeCalineSettings } = await import("../src/lib/settings")
+
+    // 1. 开启且配置有效 sitekey
+    await writeCalineSettings(env, {
+      turnstileEnabled: true,
+      turnstileSiteKey: "0x4AAAAAA_test_site_key",
+      turnstileSecretKey: "0x4AAAAAA_test_secret_key"
+    })
+    let res = await request(env, "/api/public")
+    expect(res.status).toBe(200)
+    let body = (await res.json()) as Record<string, unknown>
+    expect(body.turnstileEnabled).toBe(true)
+    expect(body.turnstileSiteKey).toBe("0x4AAAAAA_test_site_key")
+
+    // 2. 开启但 sitekey 为空/空白字符
+    await writeCalineSettings(env, {
+      turnstileEnabled: true,
+      turnstileSiteKey: "   "
+    })
+    res = await request(env, "/api/public")
+    expect(res.status).toBe(200)
+    body = (await res.json()) as Record<string, unknown>
+    expect(body.turnstileEnabled).toBe(false)
+    expect(body.turnstileSiteKey).toBe("")
+
+    // 3. 关闭但 sitekey 有值
+    await writeCalineSettings(env, {
+      turnstileEnabled: false,
+      turnstileSiteKey: "0x4AAAAAA_test_site_key"
+    })
+    res = await request(env, "/api/public")
+    expect(res.status).toBe(200)
+    body = (await res.json()) as Record<string, unknown>
+    expect(body.turnstileEnabled).toBe(false)
+    expect(body.turnstileSiteKey).toBe("")
+
+    // 4. 确保 secret key 绝不泄露到 /api/public
+    const raw = JSON.stringify(body)
+    expect(raw).not.toContain("0x4AAAAAA_test_secret_key")
+    expect(raw.toLowerCase()).not.toContain("secret")
   })
 
   it("私有接口未登录：401 JSON + no-store", async () => {

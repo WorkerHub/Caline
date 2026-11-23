@@ -164,10 +164,20 @@ export interface PublicBootstrap {
   appMode: typeof APP_MODE
   registrationEnabled: boolean
   emailConfigured: boolean
+  turnstileEnabled: boolean
+  turnstileSiteKey: string
 }
 
 export async function buildPublicBootstrap(env: Env): Promise<PublicBootstrap> {
-  const registration = await readRegistrationSettings(env)
+  const [registration, siteSettings, emailConfigured] = await Promise.all([
+    readRegistrationSettings(env),
+    readCalineSettings(env),
+    isEmailConfigured(env)
+  ])
+  const turnstileSiteKey = siteSettings.turnstileSiteKey.trim()
+  const turnstileEnabled =
+    siteSettings.turnstileEnabled && turnstileSiteKey.length > 0
+
   return {
     name: PROJECT_NAME,
     tagline: PROJECT_TAGLINE,
@@ -175,7 +185,9 @@ export async function buildPublicBootstrap(env: Env): Promise<PublicBootstrap> {
     version: (env.APP_VERSION ?? "").trim() || UNKNOWN_VERSION,
     appMode: APP_MODE,
     registrationEnabled: APP_MODE === "multi" && registration.enabled,
-    emailConfigured: await isEmailConfigured(env)
+    emailConfigured,
+    turnstileEnabled,
+    turnstileSiteKey: turnstileEnabled ? turnstileSiteKey : ""
   }
 }
 
