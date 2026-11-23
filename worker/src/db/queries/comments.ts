@@ -568,3 +568,25 @@ export async function adminBatchDelete(
   }
   return count
 }
+
+/**
+ * 检查对象 key 是否出现在任何现存评论的 content_raw 或 content_html 中。
+ * 供孤儿图定时清理判定使用。
+ */
+export async function isImageReferencedInComments(
+  db: D1Database,
+  prefix: string,
+  key: string
+): Promise<boolean> {
+  const table = commentTable(prefix)
+  const row = await db
+    .prepare(
+      `SELECT id FROM ${table}
+       WHERE INSTR(content_raw, ?) > 0 OR INSTR(content_html, ?) > 0
+       LIMIT 1`
+    )
+    .bind(key, key)
+    .first<{ id: number }>()
+
+  return row !== null && row !== undefined
+}

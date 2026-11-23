@@ -9,8 +9,8 @@
 import { Hono } from "hono"
 import { wakerSigningKey } from "../core/waker-gate"
 import {
-  runScheduledTask,
-  SCHEDULED_TASK_NAME
+  REGISTERED_SCHEDULED_JOBS,
+  runScheduledTask
 } from "../services/scheduled-task"
 import { CALLBACK_HEADERS, verifyWakerSignature } from "../waker/verify"
 import type { HonoEnv } from "../types"
@@ -94,13 +94,16 @@ wakerRoutes.post("/execute", async (c) => {
       400
     )
   }
-  if (body.jobName !== SCHEDULED_TASK_NAME) {
+  if (
+    typeof body.jobName !== "string" ||
+    !REGISTERED_SCHEDULED_JOBS.includes(body.jobName as any)
+  ) {
     return c.json(
       {
         ok: false,
         error: {
           code: "unknown_job",
-          message: `Unknown job; the only registered job is "${SCHEDULED_TASK_NAME}"`
+          message: `Unknown job; registered jobs are ${REGISTERED_SCHEDULED_JOBS.map((j) => `"${j}"`).join(", ")}`
         }
       },
       404
@@ -108,7 +111,10 @@ wakerRoutes.post("/execute", async (c) => {
   }
 
   try {
-    const outcome = await runScheduledTask(c.env, { trigger: "waker" })
+    const outcome = await runScheduledTask(c.env, {
+      trigger: "waker",
+      jobName: body.jobName
+    })
     return c.json({ ok: true, ...outcome })
   } catch (err) {
     console.error(

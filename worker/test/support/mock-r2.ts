@@ -66,13 +66,20 @@ export class MockR2Bucket implements R2Bucket {
       key,
       data: bytes,
       size: bytes.byteLength,
-      uploaded: new Date(),
+      uploaded: (options as any)?.uploaded ?? new Date(),
       httpMetadata: options?.httpMetadata,
       customMetadata: options?.customMetadata
     }
 
     this.storage.set(key, item)
     return this.toR2Object(item)
+  }
+
+  setUploaded(key: string, uploaded: Date): void {
+    const item = this.storage.get(key)
+    if (item) {
+      item.uploaded = uploaded
+    }
   }
 
   async get(key: string): Promise<R2ObjectBody | null> {
