@@ -240,6 +240,11 @@
 
   "profile": {
     "title": "Profile",
+    "selectAvatar": "Select image",
+    "avatarPreview": "Avatar preview",
+    "avatarSaved": "Avatar updated",
+    "avatarUploadFailed": "Failed to upload avatar",
+    "uploading": "Uploading...",
     "displayName": "Nickname",
     "email": "Email",
     "emailVerified": "Verified",

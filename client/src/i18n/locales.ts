@@ -140,7 +140,7 @@ export const enUS: Record<LocaleKey, string> = {
   recent_title: "Recent Comments",
   pageview: "Views",
   guest: "Guest",
-  admin: "Admin",
+  admin: "Administrator",
   verified: "Verified",
   posting_as: "Posting as {name}",
   logout: "Sign out",

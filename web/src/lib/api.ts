@@ -93,14 +93,19 @@ async function request<T>(
   options: RequestOptions = {}
 ): Promise<T> {
   const { body, headers, method = "GET" } = options
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData
   const init: RequestInit = {
     method,
     credentials: "include",
     headers: {
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(body === undefined || isFormData
+        ? {}
+        : { "Content-Type": "application/json" }),
       ...headers
     },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) })
+    ...(body === undefined
+      ? {}
+      : { body: isFormData ? body : JSON.stringify(body) })
   }
 
   let response: Response
@@ -301,6 +306,21 @@ export const meApi = {
 
   update: (input: MeUpdateInput) =>
     request<Me>("/me", { method: "PUT", body: input }),
+
+  uploadAvatar: (file: File | FormData) => {
+    const body =
+      file instanceof FormData
+        ? file
+        : (() => {
+            const fd = new FormData()
+            fd.append("file", file)
+            return fd
+          })()
+    return request<{ avatar: string }>("/me/avatar", {
+      method: "POST",
+      body
+    })
+  },
 
   changePassword: (input: { currentPassword: string; newPassword: string }) =>
     request<{ success: true }>("/me/password", { method: "PUT", body: input }),

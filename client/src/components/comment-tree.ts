@@ -41,6 +41,15 @@ export function renderCommentTree(props: CommentTreeProps): HTMLElement {
   return container
 }
 
+function renderBadgeHtml(
+  badge: string | undefined,
+  t: (key: LocaleKey) => string
+): string {
+  if (!badge) return ""
+  const text = badge === "admin" ? t("admin") : escapeHtml(badge)
+  return `<span class="cl-badge">${text}</span>`
+}
+
 function renderRootComment(
   item: CommentPublicItem,
   props: CommentTreeProps
@@ -62,9 +71,7 @@ function renderRootComment(
   const stickyHtml = item.sticky
     ? `<span class="cl-sticky-tag">${props.t("sticky")}</span>`
     : ""
-  const badgeHtml = item.badge
-    ? `<span class="cl-badge">${escapeHtml(item.badge)}</span>`
-    : ""
+  const badgeHtml = renderBadgeHtml(item.badge, props.t)
   const levelHtml =
     item.level !== undefined
       ? `<span class="cl-badge">Lv.${item.level}</span>`
@@ -153,9 +160,7 @@ function renderReplyComment(
     ? `<a href="${safeLink}" target="_blank" rel="nofollow ugc noopener" class="cl-nick">${safeNick}</a>`
     : `<span class="cl-nick">${safeNick}</span>`
 
-  const badgeHtml = reply.badge
-    ? `<span class="cl-badge">${escapeHtml(reply.badge)}</span>`
-    : ""
+  const badgeHtml = renderBadgeHtml(reply.badge, props.t)
   const levelHtml =
     reply.level !== undefined
       ? `<span class="cl-badge">Lv.${reply.level}</span>`
