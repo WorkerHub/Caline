@@ -28,6 +28,10 @@ export interface CalineInitOptions {
   lang?: string
   pageSize?: number
   wordLimit?: number
+  turnstile?: {
+    enabled?: boolean
+    siteKey?: string
+  }
 }
 
 export class CalineWidget {
@@ -48,6 +52,12 @@ export class CalineWidget {
     comment: { id: number; nick: string }
     rootId: number
   } | null = null
+  private turnstileConfig: { enabled: boolean; siteKey: string } = {
+    enabled: false,
+    siteKey: ""
+  }
+  private mainEditorEl: HTMLElement | null = null
+  private replyEditorEl: HTMLElement | null = null
 
   private editorContainer!: HTMLElement
   private treeContainer!: HTMLElement
@@ -102,9 +112,51 @@ export class CalineWidget {
     this.t = createTranslator(lang)
     this.client = new CalineApiClient(this.serverUrl)
 
+    if (options.turnstile) {
+      this.turnstileConfig = {
+        enabled: Boolean(
+          options.turnstile.enabled && options.turnstile.siteKey
+        ),
+        siteKey: (options.turnstile.siteKey || "").trim()
+      }
+    }
+
     this.renderSkeleton()
     void this.checkAuth()
+    void this.loadPublicConfig()
     this.loadComments()
+  }
+
+  private async loadPublicConfig(): Promise<void> {
+    try {
+      const config = await this.client.getPublicConfig()
+      const enabled = Boolean(
+        config?.turnstileEnabled && config?.turnstileSiteKey
+      )
+      const siteKey =
+        typeof config?.turnstileSiteKey === "string"
+          ? config.turnstileSiteKey.trim()
+          : ""
+
+      const changed =
+        this.turnstileConfig.enabled !== enabled ||
+        this.turnstileConfig.siteKey !== siteKey
+
+      if (changed) {
+        this.turnstileConfig = { enabled, siteKey }
+        if (!this.currentUser) {
+          this.renderMainEditor()
+          if (this.currentReplyTarget) {
+            this.showReplyEditor(
+              this.currentReplyTarget.comment,
+              this.currentReplyTarget.rootId
+            )
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 
   private renderSkeleton() {
@@ -216,12 +268,22 @@ export class CalineWidget {
   }
 
   private renderMainEditor() {
+    if (this.mainEditorEl) {
+      const elWithCleanup = this.mainEditorEl as HTMLElement & {
+        cleanup?: () => void
+      }
+      if (typeof elWithCleanup.cleanup === "function") {
+        elWithCleanup.cleanup()
+      }
+      this.mainEditorEl = null
+    }
     this.editorContainer.innerHTML = ""
     const editor = createEditor({
       t: this.t,
       wordLimit: this.wordLimit,
       serverUrl: this.serverUrl,
       user: this.currentUser,
+      turnstile: this.turnstileConfig,
       onLogout: () => this.handleLogout(),
       onLoginSuccess: () => this.checkAuth(),
       onUpload: (file, turnstileToken) =>
@@ -233,6 +295,7 @@ export class CalineWidget {
           nick?: string
           mail?: string
           link?: string
+          turnstileToken?: string
         } = {
           url: this.path,
           content: data.content
@@ -240,6 +303,7 @@ export class CalineWidget {
         if (data.nick) payload.nick = data.nick
         if (data.mail) payload.mail = data.mail
         if (data.link) payload.link = data.link
+        if (data.turnstileToken) payload.turnstileToken = data.turnstileToken
 
         const res = await this.client.createComment(payload)
 
@@ -253,6 +317,7 @@ export class CalineWidget {
         await this.loadComments(true)
       }
     })
+    this.mainEditorEl = editor
     this.editorContainer.appendChild(editor)
   }
 
@@ -321,6 +386,16 @@ export class CalineWidget {
   ) {
     this.currentReplyTarget = { comment, rootId }
 
+    if (this.replyEditorEl) {
+      const elWithCleanup = this.replyEditorEl as HTMLElement & {
+        cleanup?: () => void
+      }
+      if (typeof elWithCleanup.cleanup === "function") {
+        elWithCleanup.cleanup()
+      }
+      this.replyEditorEl = null
+    }
+
     // 移除已有回复框
     const existing = this.treeContainer.querySelector(".cl-reply-editor-slot")
     if (existing) existing.remove()
@@ -339,6 +414,7 @@ export class CalineWidget {
       wordLimit: this.wordLimit,
       serverUrl: this.serverUrl,
       user: this.currentUser,
+      turnstile: this.turnstileConfig,
       onLogout: () => this.handleLogout(),
       onLoginSuccess: () => this.checkAuth(),
       onUpload: (file, turnstileToken) =>
@@ -346,6 +422,15 @@ export class CalineWidget {
       replyTarget: {
         nick: comment.nick || this.t("guest"),
         onCancel: () => {
+          if (this.replyEditorEl) {
+            const elWithCleanup = this.replyEditorEl as HTMLElement & {
+              cleanup?: () => void
+            }
+            if (typeof elWithCleanup.cleanup === "function") {
+              elWithCleanup.cleanup()
+            }
+            this.replyEditorEl = null
+          }
           this.currentReplyTarget = null
           replySlot.remove()
         }
@@ -359,6 +444,7 @@ export class CalineWidget {
           nick?: string
           mail?: string
           link?: string
+          turnstileToken?: string
         } = {
           url: this.path,
           content: data.content,
@@ -368,6 +454,7 @@ export class CalineWidget {
         if (data.nick) payload.nick = data.nick
         if (data.mail) payload.mail = data.mail
         if (data.link) payload.link = data.link
+        if (data.turnstileToken) payload.turnstileToken = data.turnstileToken
 
         const res = await this.client.createComment(payload)
 
@@ -375,6 +462,15 @@ export class CalineWidget {
           saveEditToken(res.comment.id, res.editToken)
         }
 
+        if (this.replyEditorEl) {
+          const elWithCleanup = this.replyEditorEl as HTMLElement & {
+            cleanup?: () => void
+          }
+          if (typeof elWithCleanup.cleanup === "function") {
+            elWithCleanup.cleanup()
+          }
+          this.replyEditorEl = null
+        }
         this.currentReplyTarget = null
         replySlot.remove()
         this.currentPage = 1
@@ -382,6 +478,7 @@ export class CalineWidget {
       }
     })
 
+    this.replyEditorEl = editor
     replySlot.appendChild(editor)
     const contentWrap = targetEl.querySelector(".cl-content-wrap")
     if (contentWrap) {

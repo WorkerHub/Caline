@@ -254,6 +254,27 @@
   font-weight: 600;
 }
 
+/* Turnstile 人机验证挑战插槽 */
+.cl-turnstile-slot {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.cl-turnstile-comment {
+  margin-bottom: 8px;
+  justify-content: flex-start;
+}
+
+.cl-turnstile-upload {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.cl-turnstile-slot iframe {
+  max-width: 100%;
+}
+
 .cl-btn {
   padding: 6px 16px;
   border-radius: var(--cl-radius);
