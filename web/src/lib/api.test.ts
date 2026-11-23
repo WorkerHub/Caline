@@ -215,3 +215,49 @@ describe("响应信封统一解包与错误契约（QA #7 缺陷②）", () => {
     })
   })
 })
+
+describe("Passkey 直接登录端点", () => {
+  it("passkeyDirectOptions 走 POST /api/auth/passkey/options 且无请求体", async () => {
+    let requestedUrl = ""
+    let requestedMethod = ""
+    let requestedBody: unknown = null
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        requestedUrl = url
+        requestedMethod = init.method ?? "GET"
+        requestedBody = init.body
+        return respond(200, { challenge: "mock-challenge" })
+      })
+    )
+
+    const res = await authApi.passkeyDirectOptions()
+    expect(requestedUrl).toBe("/api/auth/passkey/options")
+    expect(requestedMethod).toBe("POST")
+    expect(requestedBody).toBeUndefined()
+    expect(res).toEqual({ challenge: "mock-challenge" })
+  })
+
+  it("passkeyDirectVerify 走 POST /api/auth/passkey/verify 且携带 credential", async () => {
+    let requestedUrl = ""
+    let requestedMethod = ""
+    let requestedBody: unknown = null
+    const mockUser = me()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        requestedUrl = url
+        requestedMethod = init.method ?? "GET"
+        requestedBody = init.body
+        return respond(200, { success: true, user: mockUser })
+      })
+    )
+
+    const mockCred = { id: "cred-1", rawId: "cred-1", response: {} }
+    const res = await authApi.passkeyDirectVerify(mockCred)
+    expect(requestedUrl).toBe("/api/auth/passkey/verify")
+    expect(requestedMethod).toBe("POST")
+    expect(requestedBody).toBe(JSON.stringify({ credential: mockCred }))
+    expect(res).toEqual({ success: true, user: mockUser })
+  })
+})
