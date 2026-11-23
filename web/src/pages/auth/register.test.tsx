@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { changeLanguage } from "@/i18n"
-import { me, publicInfo } from "@/test/fixtures"
+import { publicInfo } from "@/test/fixtures"
 import { RegisterPage } from "@/pages/auth/register"
 import { useSiteStore } from "@/stores/site"
 
@@ -23,8 +23,6 @@ vi.mock("@/lib/api", async (importOriginal) => {
 })
 
 const { authApi } = await import("@/lib/api")
-
-const AUTH_SUCCESS_TYPE = `${"cal"}${"ine"}:auth-success`
 
 function renderRegister(initialEntries = ["/register"]) {
   return render(
@@ -127,63 +125,10 @@ describe("注册", () => {
 })
 
 describe("注册页弹窗模式（?popup=1）", () => {
-  const originalOpener = window.opener
-
-  afterEach(() => {
-    Object.defineProperty(window, "opener", {
-      value: originalOpener,
-      writable: true,
-      configurable: true
-    })
-    vi.restoreAllMocks()
-  })
-
-  it("注册成功若自动登录，同口径向 opener 发送 postMessage 并关窗", async () => {
-    const postMessage = vi.fn()
-    Object.defineProperty(window, "opener", {
-      value: { postMessage },
-      writable: true,
-      configurable: true
-    })
-    const closeSpy = vi.spyOn(window, "close").mockImplementation(() => {})
-
+  it("注册成功后去登录链接携带 ?popup=1", async () => {
     vi.mocked(authApi.register).mockResolvedValue({
       requiresApproval: false,
       requiresEmailVerification: false
-    })
-    vi.mocked(authApi.login).mockResolvedValue({
-      success: true,
-      user: me()
-    })
-
-    const user = userEvent.setup()
-    renderRegister(["/register?popup=1"])
-    await enterCredentials(user)
-
-    await waitFor(() => {
-      expect(postMessage).toHaveBeenCalledWith(
-        { type: AUTH_SUCCESS_TYPE },
-        window.location.origin
-      )
-    })
-    expect(closeSpy).toHaveBeenCalledTimes(1)
-  })
-
-  it("注册成功自动登录但无 opener 时回现行行为（展示已完成提示）", async () => {
-    Object.defineProperty(window, "opener", {
-      value: null,
-      writable: true,
-      configurable: true
-    })
-    const closeSpy = vi.spyOn(window, "close").mockImplementation(() => {})
-
-    vi.mocked(authApi.register).mockResolvedValue({
-      requiresApproval: false,
-      requiresEmailVerification: false
-    })
-    vi.mocked(authApi.login).mockResolvedValue({
-      success: true,
-      user: me()
     })
 
     const user = userEvent.setup()
@@ -191,8 +136,7 @@ describe("注册页弹窗模式（?popup=1）", () => {
     await enterCredentials(user)
 
     expect(await screen.findByText("注册成功")).toBeInTheDocument()
-    expect(closeSpy).not.toHaveBeenCalled()
-    // 完成界面的去登录按钮携带 ?popup=1
+    // 完成界面的去登录按钮携带 ?popup=1，引导用户进入弹窗登录完成 postMessage 关窗
     const goLoginLink = screen.getByRole("link", { name: "去登录" })
     expect(goLoginLink).toHaveAttribute("href", "/login?popup=1")
   })

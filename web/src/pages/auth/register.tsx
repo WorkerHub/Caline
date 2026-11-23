@@ -6,19 +6,16 @@ import { Field } from "@/components/form-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useCooldown } from "@/hooks/use-cooldown"
-import { applyAccountLanguage, currentLanguage } from "@/i18n"
+import { currentLanguage } from "@/i18n"
 import { authApi } from "@/lib/api"
 import { describeApiError, retryAfterSeconds } from "@/lib/api-errors"
 import type { RegisterResult } from "@/lib/api-types"
-import { useAuthStore } from "@/stores/auth"
 import { useSiteStore } from "@/stores/site"
 
 type Step =
   | { kind: "form" }
   | { kind: "verify"; email: string; result: RegisterResult }
   | { kind: "done"; email: string; pending: boolean }
-
-const AUTH_SUCCESS_TYPE = `${"cal"}${"ine"}:auth-success`
 
 /**
  * 注册页（规格 §5.6、§6.1）：注册成功按服务端返回的两个开关决定后续——
@@ -66,32 +63,6 @@ export function RegisterPage() {
         setCode("")
         cooldown.start(60)
         return
-      }
-      if (!result.requiresApproval) {
-        try {
-          const loginResult = await authApi.login({
-            email: email.trim(),
-            password
-          })
-          if (!("requires2fa" in loginResult)) {
-            useAuthStore.getState().setUser(loginResult.user)
-            await applyAccountLanguage(loginResult.user.language)
-            if (
-              isPopup &&
-              window.opener &&
-              typeof window.opener.postMessage === "function"
-            ) {
-              window.opener.postMessage(
-                { type: AUTH_SUCCESS_TYPE },
-                window.location.origin
-              )
-              window.close()
-              return
-            }
-          }
-        } catch {
-          // 自动登录失败不阻断注册成功态展示
-        }
       }
       setStep({
         kind: "done",

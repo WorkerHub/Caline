@@ -9,7 +9,11 @@ import { useCooldown } from "@/hooks/use-cooldown"
 import { applyAccountLanguage, currentLanguage } from "@/i18n"
 import { ApiError, authApi } from "@/lib/api"
 import { describeApiError, retryAfterSeconds } from "@/lib/api-errors"
-import type { Me, TwoFactorMethod } from "@/lib/api-types"
+import {
+  AUTH_SUCCESS_TYPE,
+  type Me,
+  type TwoFactorMethod
+} from "@/lib/api-types"
 import {
   authenticationCredential,
   isWebAuthnCancelled,
@@ -33,8 +37,6 @@ type Step =
  * - 密码框独占 `type="password"`；验证码框 `type="text"` + `one-time-code` +
  *   `inputmode="numeric"`，name/id 不含 password。
  */
-const AUTH_SUCCESS_TYPE = `${"cal"}${"ine"}:auth-success`
-
 export function LoginPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -66,11 +68,7 @@ export function LoginPage() {
   const finishLogin = async (user: Me) => {
     useAuthStore.getState().setUser(user)
     await applyAccountLanguage(user.language)
-    if (
-      isPopup &&
-      window.opener &&
-      typeof window.opener.postMessage === "function"
-    ) {
+    if (isPopup && window.opener) {
       window.opener.postMessage(
         { type: AUTH_SUCCESS_TYPE },
         window.location.origin

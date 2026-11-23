@@ -81,3 +81,6 @@ export type LoginResult =
 export interface LogoutResult {
   success: true
 }
+
+/** 弹窗模式登录成功向 opener 发送的 postMessage 事件类型 */
+export const AUTH_SUCCESS_TYPE = "caline:auth-success"

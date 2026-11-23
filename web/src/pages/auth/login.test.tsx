@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/lib/api"
+import { AUTH_SUCCESS_TYPE } from "@/lib/api-types"
 import { LoginPage } from "@/pages/auth/login"
 import { useAuthStore } from "@/stores/auth"
 import { useSiteStore } from "@/stores/site"
@@ -28,8 +29,6 @@ vi.mock("@/lib/api", async (importOriginal) => {
 })
 
 const { authApi } = await import("@/lib/api")
-
-const AUTH_SUCCESS_TYPE = `${"cal"}${"ine"}:auth-success`
 
 function renderLogin(initialEntries = ["/login"]) {
   return render(
