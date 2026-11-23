@@ -34,7 +34,7 @@ export interface CommentPublicReplyItem {
   likeCount: number
   createdAt: string
   updatedAt: string
-  badge?: string
+  badge?: "admin"
   level?: number
 }
 
@@ -51,10 +51,13 @@ export interface CommentPublicItem {
   likeCount: number
   createdAt: string
   updatedAt: string
-  badge?: string
+  badge?: "admin"
   level?: number
   replies: CommentPublicReplyItem[]
 }
+
+/** 评论项类型别名（对应公开根评论项） */
+export type Comment = CommentPublicItem
 
 /** GET /api/comments 查询参数 */
 export interface ListCommentsQuery {
@@ -140,6 +143,7 @@ export interface RecentCommentItem {
   link: string
   contentHtml: string
   createdAt: string
+  badge?: "admin"
 }
 
 /** GET /api/comments/recent 响应 data 形状 */
