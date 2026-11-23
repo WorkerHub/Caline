@@ -9,7 +9,11 @@ import { useCooldown } from "@/hooks/use-cooldown"
 import { applyAccountLanguage, currentLanguage } from "@/i18n"
 import { ApiError, authApi } from "@/lib/api"
 import { describeApiError, retryAfterSeconds } from "@/lib/api-errors"
-import type { Me, TwoFactorMethod } from "@/lib/api-types"
+import {
+  AUTH_SUCCESS_TYPE,
+  type Me,
+  type TwoFactorMethod
+} from "@/lib/api-types"
 import {
   authenticationCredential,
   isWebAuthnCancelled,
@@ -49,6 +53,7 @@ export function LoginPage() {
   const emailCooldown = useCooldown()
   const [emailSent, setEmailSent] = useState(false)
 
+  const isPopup = new URLSearchParams(location.search).get("popup") === "1"
   const from = (location.state as { from?: string } | null)?.from
   const canRegister =
     info?.appMode === "multi" && info?.registrationEnabled === true
@@ -63,6 +68,14 @@ export function LoginPage() {
   const finishLogin = async (user: Me) => {
     useAuthStore.getState().setUser(user)
     await applyAccountLanguage(user.language)
+    if (isPopup && window.opener) {
+      window.opener.postMessage(
+        { type: AUTH_SUCCESS_TYPE },
+        window.location.origin
+      )
+      window.close()
+      return
+    }
     const returnTo = from && from !== "/login" ? from : undefined
     if (user.mustChangePassword) {
       // 首登强制改密：把原目标带到改密页，改完再回去。
@@ -353,7 +366,7 @@ export function LoginPage() {
                 components={{
                   signup: (
                     <Link
-                      to="/register"
+                      to={isPopup ? "/register?popup=1" : "/register"}
                       className="underline-offset-4 hover:underline"
                     />
                   )

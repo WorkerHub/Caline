@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { MemoryRouter } from "react-router"
+import { MemoryRouter, Route, Routes } from "react-router"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { changeLanguage } from "@/i18n"
 import { publicInfo } from "@/test/fixtures"
@@ -13,6 +13,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     authApi: {
       ...actual.authApi,
+      login: vi.fn(),
       register: vi.fn(),
       verifyEmail: vi.fn(),
       resendEmail: vi.fn()
@@ -23,10 +24,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 const { authApi } = await import("@/lib/api")
 
-function renderRegister() {
+function renderRegister(initialEntries = ["/register"]) {
   return render(
-    <MemoryRouter>
-      <RegisterPage />
+    <MemoryRouter initialEntries={initialEntries}>
+      <Routes>
+        <Route path="/register" element={<RegisterPage />} />
+      </Routes>
     </MemoryRouter>
   )
 }
@@ -118,5 +121,45 @@ describe("注册", () => {
     renderRegister()
     expect(screen.queryByLabelText("邮箱")).not.toBeInTheDocument()
     expect(screen.getByText("本站未开放注册")).toBeInTheDocument()
+  })
+})
+
+describe("注册页弹窗模式（?popup=1）", () => {
+  it("注册成功后去登录链接携带 ?popup=1", async () => {
+    vi.mocked(authApi.register).mockResolvedValue({
+      requiresApproval: false,
+      requiresEmailVerification: false
+    })
+
+    const user = userEvent.setup()
+    renderRegister(["/register?popup=1"])
+    await enterCredentials(user)
+
+    expect(await screen.findByText("注册成功")).toBeInTheDocument()
+    // 完成界面的去登录按钮携带 ?popup=1，引导用户进入弹窗登录完成 postMessage 关窗
+    const goLoginLink = screen.getByRole("link", { name: "去登录" })
+    expect(goLoginLink).toHaveAttribute("href", "/login?popup=1")
+  })
+
+  it("弹窗模式内已有账号登录链接携带 ?popup=1", () => {
+    renderRegister(["/register?popup=1"])
+    const signinLink = screen.getByRole("link", { name: "登录" })
+    expect(signinLink).toHaveAttribute("href", "/login?popup=1")
+  })
+
+  it("非弹窗模式内已有账号登录链接不携带 ?popup=1", () => {
+    renderRegister(["/register"])
+    const signinLink = screen.getByRole("link", { name: "登录" })
+    expect(signinLink).toHaveAttribute("href", "/login")
+  })
+
+  it("注册关闭时登录链接在弹窗模式下携带 ?popup=1", () => {
+    useSiteStore.setState({
+      info: publicInfo({ registrationEnabled: false }),
+      loaded: true
+    })
+    renderRegister(["/register?popup=1"])
+    const loginLink = screen.getByRole("link", { name: "登录" })
+    expect(loginLink).toHaveAttribute("href", "/login?popup=1")
   })
 })

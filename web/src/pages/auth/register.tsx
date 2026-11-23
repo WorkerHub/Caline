@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
-import { Link } from "react-router"
+import { Link, useLocation } from "react-router"
 import { AuthShell } from "@/components/auth-shell"
 import { Field } from "@/components/form-field"
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,8 @@ type Step =
  */
 export function RegisterPage() {
   const { t } = useTranslation()
+  const location = useLocation()
+  const isPopup = new URLSearchParams(location.search).get("popup") === "1"
   const info = useSiteStore((state) => state.info)
   const [step, setStep] = useState<Step>({ kind: "form" })
   const [email, setEmail] = useState("")
@@ -135,7 +137,9 @@ export function RegisterPage() {
             {t("errors.codes.REGISTRATION_DISABLED")}
           </p>
           <Button asChild className="w-full">
-            <Link to="/login">{t("auth.login.title")}</Link>
+            <Link to={isPopup ? "/login?popup=1" : "/login"}>
+              {t("auth.login.title")}
+            </Link>
           </Button>
         </div>
       </AuthShell>
@@ -185,7 +189,7 @@ export function RegisterPage() {
               components={{
                 signin: (
                   <Link
-                    to="/login"
+                    to={isPopup ? "/login?popup=1" : "/login"}
                     className="underline-offset-4 hover:underline"
                   />
                 )
@@ -259,7 +263,9 @@ export function RegisterPage() {
               : t("auth.register.verifiedBody", { email: step.email })}
           </p>
           <Button asChild className="w-full">
-            <Link to="/login">{t("auth.register.goLogin")}</Link>
+            <Link to={isPopup ? "/login?popup=1" : "/login"}>
+              {t("auth.register.goLogin")}
+            </Link>
           </Button>
         </div>
       ) : null}
