@@ -155,6 +155,7 @@ export function calineSiteSettings(
     turnstileSecretKeySet: true,
     enotifyEnabled: false,
     enotifyKeySet: false,
+    orphanCleanupEnabled: false,
     ...overrides
   }
 }

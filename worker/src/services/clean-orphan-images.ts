@@ -9,6 +9,7 @@
  */
 import { consumeCounter, ensureCountersTable } from "../core/counters"
 import { isImageReferencedInComments } from "../db/queries/comments"
+import { readCalineSettings } from "../lib/settings"
 import { getTablePrefix } from "../lib/table-prefix"
 import type { Env } from "../types"
 import type { ScheduledTrigger } from "./scheduled-task"
@@ -82,8 +83,17 @@ export async function cleanOrphanImages(
   const now = options?.now ?? Math.floor(Date.now() / 1000)
   const nowMs = now * 1000
   const trigger = options?.trigger ?? "cron"
-  const dryRun = options?.dryRun ?? true
   const minAgeMs = options?.minAgeMs ?? ORPHAN_IMAGE_MIN_AGE_MS
+
+  let dryRun = options?.dryRun
+  if (dryRun === undefined) {
+    try {
+      const siteSettings = await readCalineSettings(env)
+      dryRun = !siteSettings.orphanCleanupEnabled
+    } catch {
+      dryRun = true
+    }
+  }
 
   const emptyResult = (
     ran: boolean,
