@@ -46,7 +46,6 @@ export function SiteSettingsPage() {
   const [enotifyEnabled, setEnotifyEnabled] = useState(false)
   const [enotifyKey, setEnotifyKey] = useState("")
   const [enotifyKeySet, setEnotifyKeySet] = useState(false)
-  const [orphanCleanupEnabled, setOrphanCleanupEnabled] = useState(false)
 
   const populate = useCallback((site: CalineSiteSettings) => {
     setAuditSwitch(site.auditSwitch ?? false)
@@ -68,7 +67,6 @@ export function SiteSettingsPage() {
     setEnotifyEnabled(site.enotifyEnabled ?? false)
     setEnotifyKey("")
     setEnotifyKeySet(site.enotifyKeySet ?? false)
-    setOrphanCleanupEnabled(site.orphanCleanupEnabled ?? false)
   }, [])
 
   const load = useCallback(async () => {
@@ -127,8 +125,7 @@ export function SiteSettingsPage() {
         .filter(Boolean),
       turnstileEnabled,
       turnstileSiteKey: turnstileSiteKey.trim(),
-      enotifyEnabled,
-      orphanCleanupEnabled
+      enotifyEnabled
     }
 
     if (turnstileSecretKey.trim()) {
@@ -414,29 +411,6 @@ export function SiteSettingsPage() {
               }
             />
           </div>
-        </div>
-      </section>
-
-      {/* 系统维护 */}
-      <section className="space-y-4 rounded-xl border bg-card p-5">
-        <h3 className="font-heading text-sm font-semibold">
-          {t("siteSettings.section.maintenance")}
-        </h3>
-
-        <div className="flex items-center justify-between gap-4">
-          <Label
-            htmlFor="orphan-cleanup-switch"
-            className="flex flex-col gap-0.5"
-          >
-            <span className="text-sm font-medium">
-              {t("siteSettings.orphanCleanupEnabled")}
-            </span>
-          </Label>
-          <Switch
-            id="orphan-cleanup-switch"
-            checked={orphanCleanupEnabled}
-            onCheckedChange={setOrphanCleanupEnabled}
-          />
         </div>
       </section>
 

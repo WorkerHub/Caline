@@ -7,6 +7,7 @@ import {
   adminCreatedUser,
   adminSettings,
   adminUser,
+  calineSiteSettings,
   me,
   PROJECT_NAME
 } from "@/test/fixtures"
@@ -605,5 +606,87 @@ describe("用户管理操作列", () => {
       })
     )
     await waitFor(() => expect(adminApi.users).toHaveBeenCalledTimes(2))
+  })
+
+  it("其他：回显孤儿图片定期清理开关状态，拨动开关即时调用 updateSettings 持久化", async () => {
+    const initialSite = calineSiteSettings({ orphanCleanupEnabled: true })
+    vi.mocked(adminApi.settings).mockResolvedValue(
+      adminSettings({ site: initialSite })
+    )
+    vi.mocked(adminApi.updateSettings).mockResolvedValue(
+      adminSettings({ site: { ...initialSite, orphanCleanupEnabled: false } })
+    )
+
+    const user = userEvent.setup()
+    renderAdmin()
+
+    await user.click(await screen.findByRole("tab", { name: "其他" }))
+
+    const orphanSwitch = await screen.findByRole("switch", {
+      name: "孤儿图片定期清理"
+    })
+    expect(orphanSwitch).toBeChecked()
+
+    await user.click(orphanSwitch)
+
+    await waitFor(() =>
+      expect(adminApi.updateSettings).toHaveBeenCalledWith({
+        site: { orphanCleanupEnabled: false }
+      })
+    )
+    await waitFor(() => expect(orphanSwitch).not.toBeChecked())
+  })
+
+  it("其他：孤儿图片定期清理保存失败时就地报错并保留原状态", async () => {
+    const initialSite = calineSiteSettings({ orphanCleanupEnabled: true })
+    vi.mocked(adminApi.settings).mockResolvedValue(
+      adminSettings({ site: initialSite })
+    )
+    vi.mocked(adminApi.updateSettings).mockRejectedValue(
+      new ApiError({ status: 500, message: "Save failed" })
+    )
+
+    const user = userEvent.setup()
+    renderAdmin()
+
+    await user.click(await screen.findByRole("tab", { name: "其他" }))
+
+    const orphanSwitch = await screen.findByRole("switch", {
+      name: "孤儿图片定期清理"
+    })
+    expect(orphanSwitch).toBeChecked()
+
+    await user.click(orphanSwitch)
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("操作失败")
+    expect(orphanSwitch).toBeChecked()
+  })
+
+  it("其他：开放初始化页面开关拨动即调 updateSettings 保存", async () => {
+    vi.mocked(adminApi.settings).mockResolvedValue(
+      adminSettings({ setupPageEnabled: true })
+    )
+    vi.mocked(adminApi.updateSettings).mockResolvedValue(
+      adminSettings({ setupPageEnabled: false })
+    )
+
+    const user = userEvent.setup()
+    renderAdmin()
+
+    await user.click(await screen.findByRole("tab", { name: "其他" }))
+
+    const setupSwitch = await screen.findByRole("switch", {
+      name: /开放初始化页面/
+    })
+    expect(setupSwitch).toBeChecked()
+
+    await user.click(setupSwitch)
+
+    await waitFor(() =>
+      expect(adminApi.updateSettings).toHaveBeenCalledWith({
+        setupPageEnabled: false
+      })
+    )
+    await waitFor(() => expect(setupSwitch).not.toBeChecked())
   })
 })
