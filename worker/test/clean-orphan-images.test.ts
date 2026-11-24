@@ -9,6 +9,7 @@ import {
   ORPHAN_IMAGES_TASK_NAME
 } from "../src/services/clean-orphan-images"
 import { isImageReferencedInComments } from "../src/db/queries/comments"
+import { writeCalineSettings } from "../src/lib/settings"
 import type { Env } from "../src/types"
 import {
   activePrefix,
@@ -284,6 +285,85 @@ describe("孤儿图清理：cleanOrphanImages 核心流程", () => {
     expect(await images.get(recentKey)).not.toBeNull()
   })
 
+  it("站点设置开关联动：orphanCleanupEnabled 开则未传 dryRun 自动真删，关则 dry-run 一件不删", async () => {
+    const { env, images } = await initializedContext()
+    const prefix = activePrefix(env)
+
+    const nowSec = 1732360000
+    const nowMs = nowSec * 1000
+
+    const orphanKey = "2026/11/10/orphan-switch.png"
+    await images.put(orphanKey, "delete-when-enabled", {
+      uploaded: new Date(nowMs - 10 * 24 * 60 * 60 * 1000)
+    } as any)
+
+    const referencedKey = "2026/11/10/ref-switch.png"
+    await images.put(referencedKey, "keep-always", {
+      uploaded: new Date(nowMs - 10 * 24 * 60 * 60 * 1000)
+    } as any)
+    await insertComment(env.DB, prefix, {
+      url: "/article-switch",
+      contentRaw: `引用了 /img/${referencedKey}`,
+      contentHtml: `<p>/img/${referencedKey}</p>`
+    })
+
+    // 1. 开关开启：未传 dryRun 自动真删
+    await writeCalineSettings(env, { orphanCleanupEnabled: true })
+    const enabledResult = await cleanOrphanImages(env, {
+      trigger: "cron",
+      now: nowSec
+    })
+    expect(enabledResult.ran).toBe(true)
+    expect(enabledResult.dryRun).toBe(false)
+    expect(enabledResult.candidateCount).toBe(1)
+    expect(enabledResult.deletedCount).toBe(1)
+    expect(enabledResult.candidateKeys).toEqual([orphanKey])
+    expect(await images.get(orphanKey)).toBeNull()
+    expect(await images.get(referencedKey)).not.toBeNull()
+
+    // 2. 开关关闭：放入新孤儿图，跨窗口执行，自动 dry-run 一件不删
+    const nextDaySec = nowSec + 24 * 3600
+    const nextDayMs = nextDaySec * 1000
+    const orphanKey2 = "2026/11/11/orphan-switch-disabled.png"
+    await images.put(orphanKey2, "should-not-delete", {
+      uploaded: new Date(nextDayMs - 10 * 24 * 60 * 60 * 1000)
+    } as any)
+
+    await writeCalineSettings(env, { orphanCleanupEnabled: false })
+    const disabledResult = await cleanOrphanImages(env, {
+      trigger: "cron",
+      now: nextDaySec
+    })
+    expect(disabledResult.ran).toBe(true)
+    expect(disabledResult.dryRun).toBe(true)
+    expect(disabledResult.candidateCount).toBe(1)
+    expect(disabledResult.deletedCount).toBe(0)
+    expect(disabledResult.candidateKeys).toEqual([orphanKey2])
+    expect(await images.get(orphanKey2)).not.toBeNull()
+  })
+
+  it("显式 options.dryRun 优先于 D1 站点设置", async () => {
+    const { env, images } = await initializedContext()
+    const nowSec = 1732360000
+    const nowMs = nowSec * 1000
+
+    const orphanKey = "2026/11/10/override-orphan.png"
+    await images.put(orphanKey, "override-content", {
+      uploaded: new Date(nowMs - 10 * 24 * 60 * 60 * 1000)
+    } as any)
+
+    // 站点设置开，但显式 options.dryRun: true -> 执行 dry-run，不删除
+    await writeCalineSettings(env, { orphanCleanupEnabled: true })
+    const result = await cleanOrphanImages(env, {
+      trigger: "cron",
+      now: nowSec,
+      dryRun: true
+    })
+    expect(result.dryRun).toBe(true)
+    expect(result.deletedCount).toBe(0)
+    expect(await images.get(orphanKey)).not.toBeNull()
+  })
+
   it("D1 抢占幂等：同一每日窗口内只执行一次，第二次返回 already-claimed", async () => {
     const { env } = await initializedContext()
     const nowSec = 1732360000
@@ -348,6 +428,28 @@ describe("定时任务调度集成：waker 与原生 scheduled()", () => {
     expect(repeatBody.ok).toBe(true)
     expect(repeatBody.ran).toBe(false)
     expect(repeatBody.reason).toBe("already-claimed")
+  })
+
+  it("当 orphanCleanupEnabled: true 时，waker 触发自动执行真删", async () => {
+    const { env, images } = await initializedContext({
+      WAKER_SIGNING_KEY: WAKER_KEY
+    })
+    await writeCalineSettings(env, { orphanCleanupEnabled: true })
+
+    const orphanKey = "2026/11/10/waker-delete.png"
+    await images.put(orphanKey, "delete-via-waker", {
+      uploaded: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)
+    } as any)
+
+    const res = await triggerWakerJob(env, ORPHAN_IMAGES_TASK_NAME)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as any
+    expect(body.ok).toBe(true)
+    expect(body.ran).toBe(true)
+    expect(body.dryRun).toBe(false)
+    expect(body.candidateCount).toBe(1)
+    expect(body.deletedCount).toBe(1)
+    expect(await images.get(orphanKey)).toBeNull()
   })
 
   it("原生 scheduled() 执行时会触发孤儿图清理并记录抢占计数", async () => {
