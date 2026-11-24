@@ -372,6 +372,7 @@
       "title": "其他",
       "setupPage": "开放初始化页面",
       "setupPageHint": "只控制页面入口，接口仍需部署密钥。",
+      "orphanCleanupEnabled": "孤儿图片定期清理",
       "tablePrefix": "生效表前缀"
     }
   },
@@ -438,8 +439,7 @@
       "auditAndGuest": "审核与访客",
       "contentRules": "内容规则",
       "levelsAndDomains": "分级与安全",
-      "captchaAndNotice": "验证与通知",
-      "maintenance": "系统维护"
+      "captchaAndNotice": "验证与通知"
     },
     "auditSwitch": "全站评论审核",
     "guestMode": "访客发表权限",
@@ -466,7 +466,6 @@
     "turnstileSecretKey": "Turnstile Secret Key",
     "enotifyEnabled": "eNotify 管理员通知",
     "enotifyKey": "eNotify Key",
-    "orphanCleanupEnabled": "孤儿图片定期清理",
     "secretSet": "已配置，留空保持不变",
     "secretNotSet": "未配置",
     "saved": "系统设置已保存"

@@ -88,7 +88,8 @@ describe("站点系统设置页", () => {
     expect(enotifyKey).toHaveValue("")
     expect(enotifyKey).toHaveAttribute("placeholder", "未配置")
 
-    expect(screen.getByLabelText("孤儿图片定期清理")).toBeChecked()
+    expect(screen.queryByLabelText("孤儿图片定期清理")).not.toBeInTheDocument()
+    expect(screen.queryByText("系统维护")).not.toBeInTheDocument()
   })
 
   it("保存设置：提交更新的字段，留空的密钥不提交", async () => {
@@ -110,23 +111,21 @@ describe("站点系统设置页", () => {
 
     const auditSwitch = await screen.findByLabelText("全站评论审核")
     await user.click(auditSwitch)
-    const orphanSwitch = screen.getByLabelText("孤儿图片定期清理")
-    await user.click(orphanSwitch)
 
     await user.click(screen.getByRole("button", { name: "保存" }))
 
     await waitFor(() =>
       expect(adminApi.updateSettings).toHaveBeenCalledWith({
         site: expect.objectContaining({
-          auditSwitch: true,
-          orphanCleanupEnabled: true
+          auditSwitch: true
         })
       })
     )
 
-    // turnstileSecretKey 留空时不在 payload 中
+    // turnstileSecretKey 留空时不在 payload 中，表单提交也不再携带 orphanCleanupEnabled
     const callArgs = vi.mocked(adminApi.updateSettings).mock.calls[0][0]
     expect(callArgs.site?.turnstileSecretKey).toBeUndefined()
+    expect(callArgs.site?.orphanCleanupEnabled).toBeUndefined()
   })
 
   it("填入新密钥时，保存请求携带新密钥", async () => {

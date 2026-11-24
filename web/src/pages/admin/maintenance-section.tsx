@@ -32,6 +32,20 @@ export function MaintenanceSection({
     }
   }
 
+  const toggleOrphanCleanup = async (enabled: boolean) => {
+    setError("")
+    try {
+      const updated = await adminApi.updateSettings({
+        site: {
+          orphanCleanupEnabled: enabled
+        }
+      })
+      onSaved(updated)
+    } catch (saveError) {
+      setError(describeApiError(t, saveError))
+    }
+  }
+
   return (
     <section className="space-y-4 rounded-xl border bg-card p-4">
       <h3 className="font-heading text-sm font-semibold">
@@ -48,6 +62,18 @@ export function MaintenanceSection({
         <Switch
           checked={settings.setupPageEnabled}
           onCheckedChange={(checked) => void toggleSetupPage(checked)}
+        />
+      </label>
+
+      <label className="flex items-center justify-between gap-4 text-sm">
+        <span className="space-y-0.5">
+          <span className="block">
+            {t("admin.others.orphanCleanupEnabled")}
+          </span>
+        </span>
+        <Switch
+          checked={settings.site?.orphanCleanupEnabled ?? false}
+          onCheckedChange={(checked) => void toggleOrphanCleanup(checked)}
         />
       </label>
 

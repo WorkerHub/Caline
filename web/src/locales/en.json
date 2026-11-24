@@ -372,6 +372,7 @@
       "title": "Other",
       "setupPage": "Open the setup page",
       "setupPageHint": "This only gates the page; the endpoint still requires the deployment secret.",
+      "orphanCleanupEnabled": "Periodic Orphan Image Cleanup",
       "tablePrefix": "Effective table prefix"
     }
   },
@@ -438,8 +439,7 @@
       "auditAndGuest": "Moderation & Guests",
       "contentRules": "Content Rules",
       "levelsAndDomains": "Levels & Domains",
-      "captchaAndNotice": "Verification & Notifications",
-      "maintenance": "Maintenance"
+      "captchaAndNotice": "Verification & Notifications"
     },
     "auditSwitch": "Comment Moderation",
     "guestMode": "Guest Posting",
@@ -466,7 +466,6 @@
     "turnstileSecretKey": "Turnstile Secret Key",
     "enotifyEnabled": "eNotify Notifications",
     "enotifyKey": "eNotify Key",
-    "orphanCleanupEnabled": "Periodic Orphan Image Cleanup",
     "secretSet": "Configured, leave blank to keep",
     "secretNotSet": "Not configured",
     "saved": "Settings saved"
