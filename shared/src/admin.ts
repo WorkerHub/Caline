@@ -129,6 +129,8 @@ export interface CalineSiteSettings {
   enotifyEnabled: boolean
   /** eNotify Key 是否已配置（脱敏布尔值） */
   enotifyKeySet: boolean
+  /** 孤儿图片定期清理开关（默认 false：关为 dry-run 只统计，开为真删） */
+  orphanCleanupEnabled: boolean
 }
 
 /** PUT /api/admin/settings 请求中 site 字段的更新入参 */
@@ -150,6 +152,7 @@ export interface CalineSiteSettingsPatch {
   enotifyEnabled?: boolean
   /** 写入新 eNotify Key；留空表示不改动已存密钥 */
   enotifyKey?: string
+  orphanCleanupEnabled?: boolean
 }
 
 /** 三表 JSON 导出格式中的单行数据（规格 §11，严格脱敏 password_hash 等机密） */

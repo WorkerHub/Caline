@@ -53,7 +53,8 @@ describe("站点系统设置页", () => {
           turnstileSiteKey: "my-site-key",
           turnstileSecretKeySet: true,
           enotifyEnabled: false,
-          enotifyKeySet: false
+          enotifyKeySet: false,
+          orphanCleanupEnabled: true
         })
       })
     )
@@ -86,6 +87,8 @@ describe("站点系统设置页", () => {
     const enotifyKey = screen.getByLabelText("eNotify Key")
     expect(enotifyKey).toHaveValue("")
     expect(enotifyKey).toHaveAttribute("placeholder", "未配置")
+
+    expect(screen.getByLabelText("孤儿图片定期清理")).toBeChecked()
   })
 
   it("保存设置：提交更新的字段，留空的密钥不提交", async () => {
@@ -107,13 +110,16 @@ describe("站点系统设置页", () => {
 
     const auditSwitch = await screen.findByLabelText("全站评论审核")
     await user.click(auditSwitch)
+    const orphanSwitch = screen.getByLabelText("孤儿图片定期清理")
+    await user.click(orphanSwitch)
 
     await user.click(screen.getByRole("button", { name: "保存" }))
 
     await waitFor(() =>
       expect(adminApi.updateSettings).toHaveBeenCalledWith({
         site: expect.objectContaining({
-          auditSwitch: true
+          auditSwitch: true,
+          orphanCleanupEnabled: true
         })
       })
     )

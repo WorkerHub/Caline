@@ -245,7 +245,8 @@ export const DEFAULT_CALINE_SETTINGS: Omit<
   safeDomains: [],
   turnstileEnabled: false,
   turnstileSiteKey: "",
-  enotifyEnabled: false
+  enotifyEnabled: false,
+  orphanCleanupEnabled: false
 }
 
 export async function getTurnstileSecretKey(env: Env): Promise<string | null> {
@@ -334,7 +335,10 @@ export async function readCalineSettings(
     turnstileSecretKeySet: Boolean(turnstileSecret),
     enotifyEnabled:
       parsed.enotifyEnabled ?? DEFAULT_CALINE_SETTINGS.enotifyEnabled,
-    enotifyKeySet: Boolean(enotifyKey)
+    enotifyKeySet: Boolean(enotifyKey),
+    orphanCleanupEnabled:
+      parsed.orphanCleanupEnabled ??
+      DEFAULT_CALINE_SETTINGS.orphanCleanupEnabled
   }
 }
 
@@ -378,7 +382,9 @@ export async function writeCalineSettings(
     safeDomains: patch.safeDomains ?? current.safeDomains,
     turnstileEnabled: patch.turnstileEnabled ?? current.turnstileEnabled,
     turnstileSiteKey: patch.turnstileSiteKey ?? current.turnstileSiteKey,
-    enotifyEnabled: patch.enotifyEnabled ?? current.enotifyEnabled
+    enotifyEnabled: patch.enotifyEnabled ?? current.enotifyEnabled,
+    orphanCleanupEnabled:
+      patch.orphanCleanupEnabled ?? current.orphanCleanupEnabled
   }
 
   await setSetting(

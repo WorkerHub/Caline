@@ -438,7 +438,8 @@
       "auditAndGuest": "Moderation & Guests",
       "contentRules": "Content Rules",
       "levelsAndDomains": "Levels & Domains",
-      "captchaAndNotice": "Verification & Notifications"
+      "captchaAndNotice": "Verification & Notifications",
+      "maintenance": "Maintenance"
     },
     "auditSwitch": "Comment Moderation",
     "guestMode": "Guest Posting",
@@ -465,6 +466,7 @@
     "turnstileSecretKey": "Turnstile Secret Key",
     "enotifyEnabled": "eNotify Notifications",
     "enotifyKey": "eNotify Key",
+    "orphanCleanupEnabled": "Periodic Orphan Image Cleanup",
     "secretSet": "Configured, leave blank to keep",
     "secretNotSet": "Not configured",
     "saved": "Settings saved"
